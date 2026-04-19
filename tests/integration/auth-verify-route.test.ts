@@ -300,10 +300,19 @@ describe("GET /auth/verify route", () => {
     // (both have ON DELETE no action). Use the superuser connection with session_replication_role=replica
     // to bypass FK checks for this targeted test setup — this is test-only infrastructure; the
     // production invariant (clients always exist when tokens are issued) still holds.
-    const su = superPool!;
-    await su.query("SET session_replication_role = 'replica'");
-    await su.query("DELETE FROM clients WHERE id = $1", [client!.id]);
-    await su.query("SET session_replication_role = 'origin'");
+    // Pin all three statements to a single pool connection so the session-level
+    // `session_replication_role` setting is guaranteed to apply to the DELETE and
+    // to be reset on the same connection before release. Using `pool.query()`
+    // across the three calls would work in practice but leave pool reuse as an
+    // implicit dependency; `connect()` + `release()` makes the invariant explicit.
+    const conn = await superPool!.connect();
+    try {
+      await conn.query("SET session_replication_role = 'replica'");
+      await conn.query("DELETE FROM clients WHERE id = $1", [client!.id]);
+      await conn.query("SET session_replication_role = 'origin'");
+    } finally {
+      conn.release();
+    }
 
     const res = await GET(makeRequest(raw));
 
