@@ -157,13 +157,18 @@ describe("admin-invite CLI", () => {
     expect(admins).toHaveLength(1);
   });
 
-  it("empty email → throws 'admin email is required', no admin row created", async () => {
+  it("empty or whitespace-only email → throws 'admin email is required', no admin row created", async () => {
     expect(inviteFn).toBeDefined();
     const { adminDb } = dbModule!;
 
+    // Empty string exercises the `!email` short-circuit.
     await expect(inviteFn!("")).rejects.toThrow(/admin email is required/);
+    // Whitespace-only variants exercise the `!email.trim()` branch — a refactor
+    // that dropped the trim() guard would still pass if we only tested "".
+    await expect(inviteFn!("   ")).rejects.toThrow(/admin email is required/);
+    await expect(inviteFn!("\t\n")).rejects.toThrow(/admin email is required/);
 
-    // Nothing was written to the DB.
+    // Nothing was written to the DB across all three rejections.
     const admins = await adminDb.query.admins.findMany({});
     expect(admins).toHaveLength(0);
   });
