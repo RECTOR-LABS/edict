@@ -4,7 +4,8 @@
   --tenant-color: #00e5ff;
 }
 
-html, body {
+html,
+body {
   background: #06060c;
   color: #e2e8f0;
   font-family: system-ui, sans-serif;
