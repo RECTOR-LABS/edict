@@ -1,6 +1,7 @@
 import "dotenv/config";
 import React from "react";
 import { fileURLToPath } from "node:url";
+import { sql } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
 import { issueMagicLink } from "@/lib/auth/issue";
 import { sendMail } from "@/lib/mail/resend";
@@ -24,6 +25,16 @@ export type InviteResult = {
  * shell access to a machine with DATABASE_ADMIN_URL in its environment.
  * Phase 2 will gate this behind an authenticated admin session in the UI.
  *
+ * CONCURRENCY: The find-or-insert runs inside a transaction guarded by a
+ * Postgres advisory xact lock on `hashtext('edict_admin_bootstrap')`. This
+ * serializes concurrent invite/seed invocations across the fleet, closing
+ * the TOCTOU race where two same-email readers could both see null and
+ * both attempt insert (today `admins.email` UNIQUE catches it loudly; the
+ * lock turns it into a silent, ordered reuse). Token + audit writes happen
+ * OUTSIDE the tx — they don't race meaningfully (distinct rows, independent
+ * writes) and keeping `issueMagicLink` untouched limits blast radius to
+ * this script.
+ *
  * Throws on:
  *   - Empty or whitespace-only email
  *   - DB insert failure
@@ -32,22 +43,21 @@ export type InviteResult = {
 export async function runAdminInvite(email: string): Promise<InviteResult> {
   if (!email || !email.trim()) throw new Error("admin email is required");
 
-  const existing = await adminDb.query.admins.findFirst({
-    where: (a, { eq }) => eq(a.email, email),
+  const { admin, created } = await adminDb.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('edict_admin_bootstrap'))`);
+
+    const existing = await tx.query.admins.findFirst({
+      where: (a, { eq }) => eq(a.email, email),
+    });
+
+    if (existing) {
+      return { admin: existing, created: false };
+    }
+
+    const [row] = await tx.insert(schema.admins).values({ email }).returning();
+    if (!row) throw new Error("admin insert failed");
+    return { admin: row, created: true };
   });
-
-  let created = false;
-  let admin = existing;
-
-  if (!admin) {
-    [admin] = await adminDb
-      .insert(schema.admins)
-      .values({ email })
-      .returning();
-    created = true;
-  }
-
-  if (!admin) throw new Error("admin insert failed");
 
   const { raw } = await issueMagicLink({
     subjectType: "admin",

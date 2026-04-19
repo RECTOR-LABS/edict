@@ -1,6 +1,7 @@
 import "dotenv/config";
 import React from "react";
 import { fileURLToPath } from "node:url";
+import { sql } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
 import { issueMagicLink } from "@/lib/auth/issue";
 import { sendMail } from "@/lib/mail/resend";
@@ -20,25 +21,39 @@ export type SeedResult = {
  * already exist, this function throws unconditionally — it must never be
  * callable as a self-issue path once the platform is live.
  *
+ * CONCURRENCY: The empty-check and admin insert run inside a transaction
+ * guarded by a Postgres advisory xact lock on `hashtext('edict_admin_bootstrap')`.
+ * This serializes concurrent seed/invite invocations across the fleet, closing
+ * the TOCTOU race where two empty-table readers could both insert and produce
+ * two bootstrap admins with different emails. The lock is auto-released at
+ * transaction end. Token + audit writes happen OUTSIDE the tx — they don't
+ * race meaningfully (distinct rows, independent writes) and keeping
+ * `issueMagicLink` untouched limits blast radius to this script.
+ *
  * Throws on:
  *   - Non-empty admins table (bootstrap gate violated)
  *   - DB insert failure
  *   - Mail delivery failure (sent path only)
  */
 export async function runAdminSeed(email: string): Promise<SeedResult> {
-  // SECURITY GATE: query only the id column — efficient and sufficient.
-  const existing = await adminDb.query.admins.findMany({ columns: { id: true } });
-  if (existing.length > 0) {
-    throw new Error(
-      "admins table is not empty; use edict:admin:invite from an authenticated session",
-    );
-  }
+  const admin = await adminDb.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('edict_admin_bootstrap'))`);
 
-  const [admin] = await adminDb
-    .insert(schema.admins)
-    .values({ email, name: "Bootstrap Admin" })
-    .returning();
-  if (!admin) throw new Error("admin insert failed");
+    // SECURITY GATE: query only the id column — efficient and sufficient.
+    const existing = await tx.query.admins.findMany({ columns: { id: true } });
+    if (existing.length > 0) {
+      throw new Error(
+        "admins table is not empty; use edict:admin:invite from an authenticated session",
+      );
+    }
+
+    const [row] = await tx
+      .insert(schema.admins)
+      .values({ email, name: "Bootstrap Admin" })
+      .returning();
+    if (!row) throw new Error("admin insert failed");
+    return row;
+  });
 
   const { raw } = await issueMagicLink({
     subjectType: "admin",
