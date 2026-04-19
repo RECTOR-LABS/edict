@@ -6,6 +6,12 @@ import { writeAudit } from "@/lib/db/queries/audit";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * `reason` is forward-compat. Every failure path currently collapses to
+ * `"invalid"` to avoid an enumeration oracle — distinguishing "no such token"
+ * from "expired" from "already consumed" would let an attacker confirm valid
+ * hashes. Callers should render a generic failure UI regardless of reason.
+ */
 export type VerifyResult =
   | {
       ok: true;
