@@ -43,6 +43,8 @@ describe("magic link: issue → verify", () => {
     // Dynamic import AFTER env vars are set — top-level import would fail required() check
     dbModule = await import("@/lib/db");
     const { adminDb, schema } = dbModule;
+    const { eq } = await import("drizzle-orm");
+    const { sha256Hex } = await import("@/lib/utils/hash");
     const [admin] = await adminDb
       .insert(schema.admins)
       .values({ email: "a@edict.test", name: "Admin A" })
@@ -59,7 +61,21 @@ describe("magic link: issue → verify", () => {
     });
 
     const first = await verifyMagicLink({ rawToken: raw });
-    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(`expected verify to succeed, got reason=${first.reason}`);
+    // 64 random bytes base32-no-pad → ceil(64 * 8 / 5) = 103 chars, lowercase alphanumeric.
+    expect(first.sessionToken).toMatch(/^[a-z0-9]{103}$/);
+    expect(first.subjectType).toBe("admin");
+    expect(first.clientId).toBeNull();
+
+    // Persisted session matches the returned token and is scoped to the issuing admin.
+    const sessionRow = await adminDb.query.sessions.findFirst({
+      where: eq(schema.sessions.sessionTokenHash, sha256Hex(first.sessionToken)),
+    });
+    expect(sessionRow).toBeTruthy();
+    expect(sessionRow?.subjectType).toBe("admin");
+    expect(sessionRow?.subjectId).toBe(admin!.id);
+    expect(sessionRow?.clientId).toBeNull();
+    expect(sessionRow?.revokedAt).toBeNull();
 
     const replay = await verifyMagicLink({ rawToken: raw });
     expect(replay.ok).toBe(false);
