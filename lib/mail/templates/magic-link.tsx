@@ -202,7 +202,7 @@ export function MagicLinkEmail({
               style={{
                 fontFamily: MONO,
                 fontSize: 11,
-                color: "#4a4a59",
+                color: "#7a7a8c",
                 letterSpacing: "0.5px",
                 margin: 0,
               }}

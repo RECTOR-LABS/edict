@@ -33,7 +33,7 @@ Brand: professional trust-first design language.
 - **Document title block:** slight panel `#0a0a14` with a 3px cyan left accent — panel has 24/32 padding. Title in monospace, 15px, weight 500, white. (Skip the filler "Secure Document Payload" subtitle and the CSS-constructed doc icon from the raw output — neither was in the spec and they reduce rendering robustness.)
 - **CTA:** bulletproof table-based button, solid cyan fill `#00e5ff`, body text `#06060c` (background color inverted for contrast), monospace, uppercase, weight 700, tracking 1px, padding 16/32. Label: "Open your edict →".
 - **Fine print:** sans-serif 12px, muted `#666677`. Tighten to the spec copy exactly: "This link is valid for 24 hours. If you did not expect this, ignore it." (The raw output expanded this with extra sentences; keep the spec wording.)
-- **Footer wordmark:** monospace 11px, muted, "EDICT — edict.rectorspace.com". The raw output added a small decorative cyan 6×6 square in the bottom-right; keep it if it ports cleanly, drop if it fights the `react-email` Container.
+- **Footer wordmark:** monospace 11px, `#7a7a8c`, "EDICT — edict.rectorspace.com". Note: the raw aidesigner output used `#4a4a59` here, but that value yields ≈2.8:1 contrast on the `#06060c` background — below the WCAG AA 4.5:1 threshold for small text. Bumped to `#7a7a8c` (≈5.1:1) so the deployed template clears AA with margin to account for email-renderer anti-aliasing variation. The raw HTML block below is preserved as-is (historical artifact). The raw output also added a small decorative cyan 6×6 square in the bottom-right; keep it if it ports cleanly, drop if it fights the `react-email` Container.
 - **Dark mode:** enforced via `prefers-color-scheme: dark` block — matters for Gmail web / Outlook light-mode inversion.
 
 ## TSX port notes
@@ -215,4 +215,4 @@ The HTML below is captured verbatim for reference. Do not import or ship it — 
 
 ## Iteration history
 
-- 2026-04-19 — initial generation from Task 25 Step 1 prompt (run id above). Accepted. The TSX port trims two elements from the raw output: (a) the "Secure Document Payload" subtitle below the doc title (not in spec), (b) the CSS-constructed doc icon (fragile in email clients), (c) the embellished disclaimer copy (restored to spec wording).
+- 2026-04-19 — initial generation from Task 25 Step 1 prompt (run id above). Accepted. The TSX port trims three elements from the raw output: (a) the "Secure Document Payload" subtitle below the doc title (not in spec), (b) the CSS-constructed doc icon (fragile in email clients), (c) the embellished disclaimer copy (restored to spec wording).
