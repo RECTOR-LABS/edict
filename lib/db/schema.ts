@@ -56,3 +56,47 @@ export const clientMembers = pgTable(
     roleCheck: check("client_members_role_check", sql`${t.role} IN ('viewer','admin_of_client')`),
   }),
 );
+
+/* ---- edicts ---- */
+export const docs = pgTable(
+  "docs",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    bodyType: text("body_type").notNull(),
+    body: text("body").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => admins.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    bodyTypeCheck: check("docs_body_type_check", sql`${t.bodyType} IN ('html','markdown')`),
+  }),
+);
+
+/* ---- many-to-many: tenant ↔ doc ---- */
+export const docShares = pgTable(
+  "doc_shares",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    docId: uuid("doc_id")
+      .notNull()
+      .references(() => docs.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => ({
+    uniqDocClient: uniqueIndex("doc_shares_doc_client_idx").on(t.docId, t.clientId),
+    clientRevokedIdx: index("doc_shares_client_revoked_idx").on(t.clientId, t.revokedAt),
+  }),
+);
