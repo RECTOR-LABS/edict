@@ -132,6 +132,22 @@ describe("admin-seed CLI", () => {
     }
   });
 
+  it("throws without creating anything if email is empty or whitespace-only", async () => {
+    expect(seedFn).toBeDefined();
+    const { adminDb } = dbModule!;
+
+    // Empty string exercises the `!email` short-circuit.
+    await expect(seedFn!("")).rejects.toThrow(/admin email is required/);
+    // Whitespace-only variants exercise the `!email.trim()` branch — a refactor
+    // that dropped the trim() guard would still pass if we only tested "".
+    await expect(seedFn!("   ")).rejects.toThrow(/admin email is required/);
+    await expect(seedFn!("\t\n")).rejects.toThrow(/admin email is required/);
+
+    // Nothing was written to the DB across all three rejections.
+    const rows = await adminDb.query.admins.findMany();
+    expect(rows).toHaveLength(0);
+  });
+
   // Exercises the sendMail glue end-to-end: React.createElement(MagicLinkEmail, {...})
   // → sendMail → @react-email/render → the resend wrapper's dev-skip fallback
   // (because RESEND_API_KEY is absent in tests). A prop typo or runtime template

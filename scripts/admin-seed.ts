@@ -36,6 +36,8 @@ export type SeedResult = {
  *   - Mail delivery failure (sent path only)
  */
 export async function runAdminSeed(email: string): Promise<SeedResult> {
+  if (!email || !email.trim()) throw new Error("admin email is required");
+
   const admin = await adminDb.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('edict_admin_bootstrap'))`);
 
