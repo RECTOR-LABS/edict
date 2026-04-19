@@ -189,7 +189,7 @@ describe("requestMagicLinkAction", () => {
   // ── Test 4: Unknown email ──────────────────────────────────────────────────
   it("unknown email → zero tokens, one magic_link_requested audit with hashed prefix", async () => {
     expect(requestMagicLink).toBeDefined();
-    const { adminDb, schema } = dbModule!;
+    const { adminDb } = dbModule!;
 
     await requestMagicLink!(makeFormData("ghost@nowhere.test"));
 
@@ -210,7 +210,7 @@ describe("requestMagicLinkAction", () => {
   // ── Test 5: Empty email ────────────────────────────────────────────────────
   it("empty email → early return, zero inserts, zero audit events", async () => {
     expect(requestMagicLink).toBeDefined();
-    const { adminDb, schema } = dbModule!;
+    const { adminDb } = dbModule!;
 
     await requestMagicLink!(makeFormData(""));
 
@@ -224,7 +224,7 @@ describe("requestMagicLinkAction", () => {
   // ── Test 6: Whitespace-only email ─────────────────────────────────────────
   it("whitespace-only email → trim → falsy → early return, zero inserts, zero audits", async () => {
     expect(requestMagicLink).toBeDefined();
-    const { adminDb, schema } = dbModule!;
+    const { adminDb } = dbModule!;
 
     // "   ".trim() === "" → falsy → same early-return path as empty string.
     await requestMagicLink!(makeFormData("   "));
