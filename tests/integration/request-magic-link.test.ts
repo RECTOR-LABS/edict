@@ -1,13 +1,10 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Pool } from "pg";
 import type * as DbModule from "@/lib/db";
 import type { requestMagicLinkAction } from "@/actions/sessions";
-
-// Mock next/cache before any imports — revalidatePath is a no-op in test env.
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 let pg: StartedPostgreSqlContainer;
 let dbModule: typeof DbModule | undefined;

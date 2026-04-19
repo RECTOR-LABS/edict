@@ -6,7 +6,6 @@ import { sendMail } from "@/lib/mail/resend";
 import { MagicLinkEmail } from "@/lib/mail/templates/magic-link";
 import { and, eq, isNull } from "drizzle-orm";
 import React from "react";
-import { revalidatePath } from "next/cache";
 import { writeAudit } from "@/lib/db/queries/audit";
 
 export async function requestMagicLinkAction(formData: FormData) {
@@ -50,7 +49,6 @@ export async function requestMagicLinkAction(formData: FormData) {
     actorType: "system",
     metadata: { email_hash_prefix: email.slice(0, 2) + "***" },
   });
-  revalidatePath("/");
 }
 
 async function dispatch(email: string, rawToken: string, subject: string) {
