@@ -49,9 +49,11 @@ afterAll(async () => {
 beforeEach(async () => {
   if (!dbModule) return;
   const { adminDb, schema } = dbModule;
+  // Reset order is arbitrary — sessions.subjectId, magic_link_tokens.subjectId,
+  // and audit_log.actorId are plain uuid columns with NO FK to admins. These
+  // four tables can be truncated in any order without FK violations.
   await adminDb.delete(schema.auditLog);
   await adminDb.delete(schema.magicLinkTokens);
-  // sessions has no FK to admins so delete before admins to avoid FK violation on sessions.subjectId
   await adminDb.delete(schema.sessions);
   await adminDb.delete(schema.admins);
 });
