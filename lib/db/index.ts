@@ -11,13 +11,28 @@ function required(name: string): string {
 const appPool = new Pool({
   connectionString: required("DATABASE_URL"),
   max: 10,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
 });
 const adminPool = new Pool({
   connectionString: required("DATABASE_ADMIN_URL"),
   max: 5,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
 });
 
+// pg crashes the process on unhandled idle-client errors (e.g. ECONNRESET).
+// Log and let the pool discard the broken socket.
+appPool.on("error", (err) => {
+  console.error("edict appPool idle client error", err);
+});
+adminPool.on("error", (err) => {
+  console.error("edict adminPool idle client error", err);
+});
+
+/** RLS-enforced connection (role `edict_app`) — use for all per-request client work via `withClientScope`. */
 export const db = drizzle(appPool, { schema });
+/** BYPASSRLS connection — admin-only operations (token issue, session ops, audit writes, cross-tenant lookups). Never use in client-scoped code paths. */
 export const adminDb = drizzle(adminPool, { schema });
 
 /**
