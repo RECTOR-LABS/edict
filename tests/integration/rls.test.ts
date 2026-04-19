@@ -8,8 +8,6 @@ let pg: StartedPostgreSqlContainer;
 let adminClient: Client;
 let appClient: Client;
 
-const MIGRATIONS = ["0000", "0001_session_trigger", "0002_rls"];
-
 beforeAll(async () => {
   pg = await new PostgreSqlContainer("postgres:16-alpine")
     .withDatabase("edict")
