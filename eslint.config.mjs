@@ -10,6 +10,16 @@ const config = [
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      // Standard convention: underscore-prefixed args are intentionally unused.
+      // Next.js route handlers frequently receive req/ctx that aren't needed.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
 ];
