@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
       where: eq(schema.clients.id, result.clientId),
       columns: { slug: true },
     });
+    // Defensive: unreachable under the current schema. sessions.client_id FK
+    // (ON DELETE no action) prevents a client row from being removed while a
+    // session references it — verifyMagicLink.insertSession would throw a FK
+    // violation first, caught by the try/catch above. Kept for Phase I schema
+    // evolution (e.g., if we relax the FK to ON DELETE cascade).
     if (!client) return renderInvalid();
     redirectTo = `/c/${client.slug}`;
   }

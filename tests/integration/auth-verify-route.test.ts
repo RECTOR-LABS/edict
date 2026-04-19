@@ -269,8 +269,8 @@ describe("GET /auth/verify route", () => {
     expect(session.sessionTokenHash).toBe(sha256Hex(sessionTokenInCookie));
   });
 
-  // ── Test 7: Valid client_member token, client row deleted before GET ───────
-  it("client_member token but client row deleted → renderInvalid, no session created", async () => {
+  // ── Test 7: Client deleted mid-flow → verifyMagicLink FK-throws, caught by try/catch wrap
+  it("client deleted after token issued → verifyMagicLink FK-throws, caught by try/catch, renderInvalid", async () => {
     const { GET } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { issueMagicLink } = await import("@/lib/auth/issue");
@@ -292,19 +292,19 @@ describe("GET /auth/verify route", () => {
       clientId: client!.id,
     });
 
-    // verifyMagicLink consumes the token atomically; the client lookup in the route happens after.
-    // We need the magic_link_tokens row to still exist (so the token can be consumed), but the
-    // clients row must be gone so the route's `if (!client) return renderInvalid()` branch fires.
+    // Delete the client row via an FK bypass. Production invariant: clients are
+    // only deleted through paths that respect FK constraints (none exist in
+    // Phase 1). This test simulates the edge case anyway to verify the route's
+    // try/catch wrap (added at 2dade5a) handles the thrown FK violation from
+    // verifyMagicLink.insertSession without crashing the handler.
     //
-    // FK constraints prevent deleting clients while audit_log / magic_link_tokens reference it
-    // (both have ON DELETE no action). Use the superuser connection with session_replication_role=replica
-    // to bypass FK checks for this targeted test setup — this is test-only infrastructure; the
-    // production invariant (clients always exist when tokens are issued) still holds.
-    // Pin all three statements to a single pool connection so the session-level
-    // `session_replication_role` setting is guaranteed to apply to the DELETE and
-    // to be reset on the same connection before release. Using `pool.query()`
-    // across the three calls would work in practice but leave pool reuse as an
-    // implicit dependency; `connect()` + `release()` makes the invariant explicit.
+    // The route's own `if (!client) return renderInvalid()` branch is NEVER
+    // reached here — insertSession throws before returning to the route. That
+    // branch is defensive; see the comment in route.ts above it.
+    //
+    // Pin the session_replication_role toggle to a single pool connection so
+    // the replica→origin reset is colocated with the DELETE and can't leak
+    // replica mode to another pool connection.
     const conn = await superPool!.connect();
     try {
       await conn.query("SET session_replication_role = 'replica'");
@@ -316,7 +316,7 @@ describe("GET /auth/verify route", () => {
 
     const res = await GET(makeRequest(raw));
 
-    // Should render invalid — client lookup in the route returned null.
+    // verifyMagicLink threw during insertSession → try/catch caught it → renderInvalid returned.
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("This link is no longer valid");
