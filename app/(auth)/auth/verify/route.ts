@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   let result;
   try {
     result = await verifyMagicLink({ rawToken: token, ip, userAgent: ua });
-  } catch {
+  } catch (err) {
+    console.error("[auth/verify] verifyMagicLink threw:", err);
     return renderInvalid();
   }
   if (!result.ok) return renderInvalid();
