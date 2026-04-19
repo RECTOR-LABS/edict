@@ -52,7 +52,7 @@ export async function requestMagicLinkAction(formData: FormData) {
 }
 
 async function dispatch(email: string, rawToken: string, subject: string) {
-  const url = `${process.env.APP_URL}/auth/verify?token=${rawToken}`;
+  const url = `${process.env.APP_URL ?? "http://localhost:3000"}/auth/verify?token=${rawToken}`;
   await sendMail({
     to: email,
     subject,
