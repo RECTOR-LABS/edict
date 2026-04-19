@@ -4,7 +4,6 @@ import {
   uuid,
   text,
   timestamp,
-  pgRole,
   index,
   uniqueIndex,
   check,
@@ -155,5 +154,48 @@ export const sessions = pgTable(
       OR (${t.subjectType} = 'client_member' AND ${t.clientId} IS NOT NULL)`,
     ),
     subjectRevokedIdx: index("sessions_subject_revoked_idx").on(t.subjectId, t.revokedAt),
+  }),
+);
+
+/* ---- audit log ---- */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    eventType: text("event_type").notNull(),
+    actorType: text("actor_type").notNull(),
+    actorId: uuid("actor_id"),
+    clientId: uuid("client_id").references(() => clients.id),
+    docId: uuid("doc_id").references(() => docs.id),
+    ip: inet("ip"),
+    userAgent: text("user_agent"),
+    metadata: jsonb("metadata")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    actorTypeCheck: check(
+      "audit_log_actor_type_check",
+      sql`${t.actorType} IN ('client_member','admin','system')`,
+    ),
+    clientCreatedIdx: index("audit_log_client_created_idx").on(t.clientId, t.createdAt),
+    eventDocIdx: index("audit_log_event_doc_idx").on(t.eventType, t.docId, t.createdAt),
+    actorCreatedIdx: index("audit_log_actor_created_idx").on(t.actorId, t.createdAt),
+  }),
+);
+
+/* ---- sliding-window rate limit events ---- */
+export const rateLimitEvents = pgTable(
+  "rate_limit_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    bucketKey: text("bucket_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    bucketCreatedIdx: index("rate_limit_bucket_created_idx").on(t.bucketKey, t.createdAt),
   }),
 );
