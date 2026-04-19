@@ -100,3 +100,60 @@ export const docShares = pgTable(
     clientRevokedIdx: index("doc_shares_client_revoked_idx").on(t.clientId, t.revokedAt),
   }),
 );
+
+/* ---- pending magic-link tokens; raw only in email ---- */
+export const magicLinkTokens = pgTable(
+  "magic_link_tokens",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    tokenHash: text("token_hash").notNull().unique(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    email: text("email").notNull(),
+    clientId: uuid("client_id").references(() => clients.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    subjectTypeCheck: check(
+      "magic_link_subject_type_check",
+      sql`${t.subjectType} IN ('client_member','admin')`,
+    ),
+    expiresIdx: index("magic_link_expires_idx").on(t.expiresAt),
+  }),
+);
+
+/* ---- active sessions; raw only in cookie ---- */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    sessionTokenHash: text("session_token_hash").notNull().unique(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    clientId: uuid("client_id").references(() => clients.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ip: inet("ip"),
+    userAgent: text("user_agent"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    subjectTypeCheck: check(
+      "sessions_subject_type_check",
+      sql`${t.subjectType} IN ('client_member','admin')`,
+    ),
+    adminNullClient: check(
+      "sessions_admin_null_client",
+      sql`(${t.subjectType} = 'admin' AND ${t.clientId} IS NULL)
+      OR (${t.subjectType} = 'client_member' AND ${t.clientId} IS NOT NULL)`,
+    ),
+    subjectRevokedIdx: index("sessions_subject_revoked_idx").on(t.subjectId, t.revokedAt),
+  }),
+);
