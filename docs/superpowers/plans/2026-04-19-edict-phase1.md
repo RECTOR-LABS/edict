@@ -143,7 +143,7 @@ Create `package.json`:
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
@@ -206,8 +206,9 @@ Create `next.config.ts`:
 ```ts
 import type { NextConfig } from "next";
 
+// Next 16.2+ moved `typedRoutes` out of `experimental` to top level.
 const config: NextConfig = {
-  experimental: { typedRoutes: true },
+  typedRoutes: true,
   poweredByHeader: false,
   reactStrictMode: true,
 };
@@ -264,6 +265,8 @@ html, body {
 
 Create `app/layout.tsx`:
 ```tsx
+import "./globals.css";
+
 export const metadata = {
   title: "Edict",
   description: "Formal edicts, delivered.",
@@ -322,17 +325,22 @@ git commit -m "chore: scaffold next.js 16 + tailwind v4 baseline"
 
 - [ ] **Step 1: Install**
 
-Run: `pnpm add -D eslint eslint-config-next prettier eslint-plugin-prettier eslint-config-prettier`
+Run: `pnpm add -D eslint eslint-config-next prettier eslint-config-prettier`
 
 - [ ] **Step 2: ESLint flat config**
 
 Create `eslint.config.mjs`:
 ```js
-import { FlatCompat } from "@eslint/eslintrc";
-const compat = new FlatCompat();
+// Next 16 ships native flat-config entries under `eslint-config-next/*`.
+// FlatCompat crashes on ESLint 9 + Next 16 — avoid it.
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+import prettier from "eslint-config-prettier/flat";
 
-export default [
-  ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
+const config = [
+  ...nextVitals,
+  ...nextTs,
+  prettier,
   {
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
@@ -340,6 +348,8 @@ export default [
     },
   },
 ];
+
+export default config;
 ```
 
 - [ ] **Step 3: Prettier config**
@@ -356,7 +366,7 @@ Create `.prettierrc.json`:
 }
 ```
 
-Run: `pnpm add -D prettier-plugin-tailwindcss @eslint/eslintrc`
+Run: `pnpm add -D prettier-plugin-tailwindcss`
 
 Create `.prettierignore`:
 ```
@@ -999,8 +1009,6 @@ let pg: StartedPostgreSqlContainer;
 let adminClient: Client;
 let appClient: Client;
 
-const MIGRATIONS = ["0000", "0001_session_trigger", "0002_rls"];
-
 beforeAll(async () => {
   pg = await new PostgreSqlContainer("postgres:16-alpine")
     .withDatabase("edict")
@@ -1012,15 +1020,16 @@ beforeAll(async () => {
   adminClient = new Client({ connectionString: pg.getConnectionUri() });
   await adminClient.connect();
 
-  const files = await Promise.all(
-    (await import("node:fs/promises")).readdir("./migrations").then(async (names) =>
+  const files = await (await import("node:fs/promises"))
+    .readdir("./migrations")
+    .then((names) =>
       Promise.all(
-        names.filter((n) => n.endsWith(".sql")).sort().map((n) =>
-          readFile(join("./migrations", n), "utf8").then((sql) => sql),
-        ),
+        names
+          .filter((n) => n.endsWith(".sql"))
+          .sort()
+          .map((n) => readFile(join("./migrations", n), "utf8")),
       ),
-    ),
-  );
+    );
   for (const sql of files) await adminClient.query(sql);
 
   // Connect as the RLS-enforced role
@@ -1337,7 +1346,8 @@ git commit -m "feat(db): magic-link token queries (insert, consume)"
 
 Create `lib/db/queries/sessions.ts`:
 ```ts
-import { and, eq, gt, isNull } from "drizzle-orm";
+// `gt` is destructured from the findFirst callback's operator bag, so no top-level import needed.
+import { and, eq, isNull } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
 
 type Subject = "client_member" | "admin";
@@ -1585,8 +1595,10 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Pool } from "pg";
+import type * as DbModule from "@/lib/db";
 
 let pg: StartedPostgreSqlContainer;
+let dbModule: typeof DbModule | undefined;
 
 beforeAll(async () => {
   pg = await new PostgreSqlContainer("postgres:16-alpine")
@@ -1594,19 +1606,38 @@ beforeAll(async () => {
     .withUsername("edict_admin")
     .withPassword("test")
     .start();
-  process.env.DATABASE_URL = pg.getConnectionUri().replace("edict_admin", "edict_app");
-  process.env.DATABASE_ADMIN_URL = pg.getConnectionUri();
-  const pool = new Pool({ connectionString: pg.getConnectionUri() });
+
+  // Apply migrations via the superuser connection (has BYPASSRLS + create-role rights)
+  const bootstrap = new Pool({ connectionString: pg.getConnectionUri() });
   const names = (await readdir("./migrations")).filter((n) => n.endsWith(".sql")).sort();
-  for (const n of names) await pool.query(await readFile(join("./migrations", n), "utf8"));
-  await pool.end();
+  for (const n of names) await bootstrap.query(await readFile(join("./migrations", n), "utf8"));
+  await bootstrap.end();
+
+  // Build env vars explicitly — string-replacing the URI breaks because
+  // migration 0002 creates edict_app with password 'dev', not the container's 'test'.
+  const host = pg.getHost();
+  const port = pg.getMappedPort(5432);
+  process.env.DATABASE_URL = `postgres://edict_app:dev@${host}:${port}/edict`;
+  process.env.DATABASE_ADMIN_URL = pg.getConnectionUri();
 }, 60_000);
 
-afterAll(async () => { await pg?.stop(); });
+afterAll(async () => {
+  // Drain drizzle pools before the container dies, otherwise Postgres
+  // terminates open connections and vitest surfaces an unhandled error.
+  if (dbModule) {
+    await dbModule.db.$client.end().catch(() => {});
+    await dbModule.adminDb.$client.end().catch(() => {});
+  }
+  await pg?.stop();
+});
 
 describe("magic link: issue → verify", () => {
   it("issues, verifies, creates session, and refuses replay", async () => {
-    const { adminDb, schema } = await import("@/lib/db");
+    // Dynamic import AFTER env vars are set — top-level import would fail required() check
+    dbModule = await import("@/lib/db");
+    const { adminDb, schema } = dbModule;
+    const { eq } = await import("drizzle-orm");
+    const { sha256Hex } = await import("@/lib/utils/hash");
     const [admin] = await adminDb
       .insert(schema.admins)
       .values({ email: "a@edict.test", name: "Admin A" })
@@ -1623,7 +1654,20 @@ describe("magic link: issue → verify", () => {
     });
 
     const first = await verifyMagicLink({ rawToken: raw });
-    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(`expected verify to succeed, got reason=${first.reason}`);
+    // 64 random bytes base32-no-pad → ceil(64 * 8 / 5) = 103 chars
+    expect(first.sessionToken).toMatch(/^[a-z0-9]{103}$/);
+    expect(first.subjectType).toBe("admin");
+    expect(first.clientId).toBeNull();
+
+    const sessionRow = await adminDb.query.sessions.findFirst({
+      where: eq(schema.sessions.sessionTokenHash, sha256Hex(first.sessionToken)),
+    });
+    expect(sessionRow).toBeTruthy();
+    expect(sessionRow?.subjectType).toBe("admin");
+    expect(sessionRow?.subjectId).toBe(admin!.id);
+    expect(sessionRow?.clientId).toBeNull();
+    expect(sessionRow?.revokedAt).toBeNull();
 
     const replay = await verifyMagicLink({ rawToken: raw });
     expect(replay.ok).toBe(false);
@@ -1706,7 +1750,7 @@ git commit -m "feat(auth): AsyncLocalStorage session context"
 
 Create `lib/auth/middleware.ts`:
 ```ts
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { sha256Hex } from "@/lib/utils/hash";
 import { findActiveSessionByTokenHash, touchSession } from "@/lib/db/queries/sessions";
@@ -1727,12 +1771,16 @@ async function resolveSession() {
 export async function requireAdminSession<T>(fn: () => Promise<T>): Promise<T> {
   const s = await resolveSession();
   if (!s || s.subjectType !== "admin") redirect("/");
-  const hdrs = await headers();
   await touchSession(s.id);
   const ctx: EdictContext = { kind: "admin", sessionId: s.id, adminId: s.subjectId };
   return runWithContext(ctx, fn);
 }
 
+/**
+ * Resolves the caller's client session for `slug`. Sets up AsyncLocalStorage
+ * context; does NOT wrap DB work in `withClientScope`. Downstream RLS-scoped
+ * queries must call `withClientScope(ctx.clientId, fn)` themselves.
+ */
 export async function requireClientSession<T>(slug: string, fn: () => Promise<T>): Promise<T> {
   const s = await resolveSession();
   if (!s || s.subjectType !== "client_member" || !s.clientId) redirect("/");
