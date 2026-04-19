@@ -129,4 +129,48 @@ describe("admin-seed CLI", () => {
       if (original !== undefined) process.env.APP_URL = original;
     }
   });
+
+  // Exercises the sendMail glue end-to-end: React.createElement(MagicLinkEmail, {...})
+  // → sendMail → @react-email/render → the resend wrapper's dev-skip fallback
+  // (because RESEND_API_KEY is absent in tests). A prop typo or runtime template
+  // construction error in the sent branch would be caught here.
+  it("DEV_PRINT_MAGIC_LINKS=false → sendMail branch runs end-to-end and returns delivery:sent", async () => {
+    expect(seedFn).toBeDefined();
+    const { adminDb, schema } = dbModule!;
+    const { eq } = await import("drizzle-orm");
+
+    const originalDevPrint = process.env.DEV_PRINT_MAGIC_LINKS;
+    const originalResendKey = process.env.RESEND_API_KEY;
+    process.env.DEV_PRINT_MAGIC_LINKS = "false";
+    delete process.env.RESEND_API_KEY;
+
+    try {
+      const result = await seedFn!("glue@edict.test");
+
+      // The CLI took the sendMail branch, not the dev-print early return.
+      expect(result.delivery).toBe("sent");
+      expect(result.email).toBe("glue@edict.test");
+      expect(result.adminId).toMatch(/^[0-9a-f-]{36}$/);
+
+      // DB writes are identical to the dev-print happy path.
+      const admins = await adminDb.query.admins.findMany({});
+      expect(admins).toHaveLength(1);
+      expect(admins[0]!.email).toBe("glue@edict.test");
+      expect(admins[0]!.name).toBe("Bootstrap Admin");
+
+      const tokens = await adminDb.query.magicLinkTokens.findMany({
+        where: eq(schema.magicLinkTokens.subjectId, result.adminId),
+      });
+      expect(tokens).toHaveLength(1);
+      expect(tokens[0]!.consumedAt).toBeNull();
+      expect(tokens[0]!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    } finally {
+      if (originalDevPrint !== undefined) {
+        process.env.DEV_PRINT_MAGIC_LINKS = originalDevPrint;
+      } else {
+        delete process.env.DEV_PRINT_MAGIC_LINKS;
+      }
+      if (originalResendKey !== undefined) process.env.RESEND_API_KEY = originalResendKey;
+    }
+  });
 });
