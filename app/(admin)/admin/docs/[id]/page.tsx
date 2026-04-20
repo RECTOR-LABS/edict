@@ -1,20 +1,28 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, Link2, Check } from "lucide-react";
+import { ArrowLeft, Share2, Check } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { getDocById } from "@/lib/db/queries/docs";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
-import { createDocAction } from "@/actions/docs";
+import { updateDocAction } from "@/actions/docs";
 import { Field, SelectField, TextareaField } from "../_components/doc-form-fields";
 
 // ── Page (server component) ──────────────────────────────────────────────────
 
-export default async function AdminDocsNewPage() {
+export default async function AdminDocEditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
   const ctx = getContext();
   if (ctx.kind !== "admin") {
-    throw new Error("unexpected: non-admin context in /admin/docs/new");
+    throw new Error("unexpected: non-admin context in /admin/docs/[id]");
   }
 
   // Resolve admin email for nav display.
@@ -26,11 +34,14 @@ export default async function AdminDocsNewPage() {
 
   const adminEmail = adminRow?.email ?? ctx.adminId;
 
+  const doc = await getDocById(id);
+  if (!doc) notFound();
+
   return (
     <div className="min-h-screen bg-[#06060c] text-white font-sans">
       <AdminNav adminEmail={adminEmail} />
 
-      <main className="mx-auto max-w-[800px] px-6 py-10">
+      <main className="mx-auto max-w-3xl px-6 py-10">
         {/* Back link */}
         <Link
           href={"/admin/docs" as Route}
@@ -45,33 +56,41 @@ export default async function AdminDocsNewPage() {
         </Link>
 
         {/* Page header */}
-        <div className="mb-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[#8a8a93]">
-            New doc
-          </p>
-          <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">Create doc</h1>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[#8a8a93]">
+              Edit doc
+            </p>
+            <h1 className="mt-1.5 flex flex-wrap items-baseline gap-2 text-2xl font-semibold tracking-tight text-white">
+              {doc.title}
+              <span className="font-mono text-[15px] font-normal text-[#00e5ff]">
+                /{doc.slug}
+              </span>
+            </h1>
+          </div>
+
+          {/* Share link (Task 41 route) */}
+          <Link
+            href={`/admin/docs/${doc.id}/share` as Route}
+            className="group mt-1 inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-[#00e5ff] transition-opacity duration-150 hover:opacity-75"
+          >
+            <Share2 size={13} strokeWidth={1.75} />
+            Share
+          </Link>
         </div>
 
         {/* Form */}
         <div className="rounded-sm border border-[rgba(255,255,255,0.08)] bg-[#0d0d14] p-10">
-          <form action={createDocAction} className="flex flex-col gap-6">
-            {/* Slug */}
-            <Field
-              name="slug"
-              label="Slug"
-              required
-              mono
-              placeholder="adrena-implementation-plan"
-              pattern="[a-z0-9-]+"
-              hint="lowercase letters, numbers, dashes only"
-              icon={<Link2 size={14} strokeWidth={1.75} />}
-            />
+          <form action={updateDocAction} className="flex flex-col gap-6">
+            {/* Hidden doc ID — required by updateDocAction */}
+            <input type="hidden" name="id" value={doc.id} />
 
             {/* Title */}
             <Field
               name="title"
               label="Title"
               required
+              defaultValue={doc.title}
               placeholder="Adrena Trading Arena — Implementation Plan"
             />
 
@@ -79,7 +98,7 @@ export default async function AdminDocsNewPage() {
             <SelectField
               name="bodyType"
               label="Body type"
-              defaultValue="html"
+              defaultValue={doc.bodyType}
               options={[
                 { value: "html", label: "html" },
                 { value: "markdown", label: "markdown" },
@@ -92,7 +111,8 @@ export default async function AdminDocsNewPage() {
               label="Body"
               required
               rows={22}
-              placeholder={"HTML: paste full <!DOCTYPE html>...\nMarkdown: paste raw markdown."}
+              defaultValue={doc.body}
+              hint={`${doc.bodyType === "html" ? "HTML" : "Markdown"} — ${doc.body.length.toLocaleString()} chars`}
             />
 
             {/* Submit */}
@@ -105,7 +125,7 @@ export default async function AdminDocsNewPage() {
                 }}
               >
                 <Check size={15} strokeWidth={2.5} />
-                Create doc
+                Save
               </button>
             </div>
           </form>
