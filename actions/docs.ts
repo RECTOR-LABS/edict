@@ -3,10 +3,12 @@
 import { createDoc, updateDoc } from "@/lib/db/queries/docs";
 import { writeAudit } from "@/lib/db/queries/audit";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 
 export async function createDocAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
 
@@ -28,9 +30,11 @@ export async function createDocAction(formData: FormData) {
     metadata: { target_type: "doc", target_id: d.id, action: "create", title },
   });
   redirect(`/admin/docs/${d.id}` as Route);
+  });
 }
 
 export async function updateDocAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
   const id = String(formData.get("id"));
@@ -47,4 +51,5 @@ export async function updateDocAction(formData: FormData) {
     metadata: { target_type: "doc", target_id: d.id, action: "update" },
   });
   redirect(`/admin/docs/${d.id}` as Route);
+  });
 }

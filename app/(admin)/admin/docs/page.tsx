@@ -6,11 +6,13 @@ import { Plus, ArrowRight, FileText } from "lucide-react";
 import { listDocs } from "@/lib/db/queries/docs";
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 
 // ── Page (server component) ──────────────────────────────────────────────────
 
 export default async function AdminDocsPage() {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/docs");
@@ -148,4 +150,5 @@ export default async function AdminDocsPage() {
       </main>
     </div>
   );
+  });
 }

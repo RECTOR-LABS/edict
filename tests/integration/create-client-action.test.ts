@@ -36,6 +36,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock requireAdminSession — bypasses cookies()/Next.js request scope.
+// The test harness sets ALS context via runWithContext(); requireAdminSession
+// just needs to invoke fn() so getContext() still reads from the established
+// ALS store. The session-resolution path is covered by auth unit tests.
+// ---------------------------------------------------------------------------
+vi.mock("@/lib/auth/middleware", () => ({
+  requireAdminSession: vi.fn(<T>(fn: () => Promise<T>) => fn()),
+}));
+
+// ---------------------------------------------------------------------------
 // Container + DB bootstrap
 // ---------------------------------------------------------------------------
 

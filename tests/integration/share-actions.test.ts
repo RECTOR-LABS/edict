@@ -36,6 +36,15 @@ vi.mock("next/cache", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock requireAdminSession — bypasses cookies()/Next.js request scope.
+// Tests set ALS context via runWithContext(); requireAdminSession just
+// needs to invoke fn() so getContext() reads from that established store.
+// ---------------------------------------------------------------------------
+vi.mock("@/lib/auth/middleware", () => ({
+  requireAdminSession: vi.fn(<T>(fn: () => Promise<T>) => fn()),
+}));
+
+// ---------------------------------------------------------------------------
 // Container + DB bootstrap
 // ---------------------------------------------------------------------------
 

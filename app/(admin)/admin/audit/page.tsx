@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { recentAuditLog } from "@/lib/db/queries/analytics";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 
@@ -14,6 +15,7 @@ export default async function AuditPage({
 }) {
   const { event } = await searchParams;
 
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/audit");
@@ -123,4 +125,5 @@ export default async function AuditPage({
       </main>
     </div>
   );
+  });
 }

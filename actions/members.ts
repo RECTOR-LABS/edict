@@ -3,9 +3,11 @@
 import { revokeMember, upsertMember } from "@/lib/db/queries/members";
 import { writeAudit } from "@/lib/db/queries/audit";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { revalidatePath } from "next/cache";
 
 export async function addMemberAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
   const clientId = String(formData.get("clientId") ?? "");
@@ -21,9 +23,11 @@ export async function addMemberAction(formData: FormData) {
     metadata: { target_type: "client_member", target_id: m.id, action: "upsert" },
   });
   revalidatePath(`/admin/clients/${clientId}`);
+  });
 }
 
 export async function revokeMemberAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
   const memberId = String(formData.get("memberId"));
@@ -37,4 +41,5 @@ export async function revokeMemberAction(formData: FormData) {
     metadata: { target_type: "client_member", target_id: memberId, action: "revoke" },
   });
   revalidatePath(`/admin/clients/${clientId}`);
+  });
 }

@@ -6,6 +6,7 @@ import { ArrowLeft, Users, UserPlus, Trash2 } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { getClientById } from "@/lib/db/queries/clients";
 import { listMembersForClient } from "@/lib/db/queries/members";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
@@ -20,6 +21,7 @@ export default async function AdminClientDetailPage({
 }) {
   const { id } = await params;
 
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/clients/[id]");
@@ -290,4 +292,5 @@ export default async function AdminClientDetailPage({
       </main>
     </div>
   );
+  });
 }

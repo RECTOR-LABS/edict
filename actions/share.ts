@@ -12,8 +12,10 @@ import { writeAudit } from "@/lib/db/queries/audit";
 import { sendMail } from "@/lib/mail/resend";
 import { MagicLinkEmail } from "@/lib/mail/templates/magic-link";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 
 export async function shareDocAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
 
@@ -73,9 +75,11 @@ export async function shareDocAction(formData: FormData) {
   });
 
   revalidatePath(`/admin/docs/${docId}/share`);
+  });
 }
 
 export async function unshareAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
 
@@ -94,4 +98,5 @@ export async function unshareAction(formData: FormData) {
   });
 
   revalidatePath(`/admin/docs/${docId}/share`);
+  });
 }

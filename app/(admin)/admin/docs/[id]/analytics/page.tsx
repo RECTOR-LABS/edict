@@ -6,6 +6,7 @@ import { ArrowLeft, Eye, Users } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { getDocById } from "@/lib/db/queries/docs";
 import { docAnalytics } from "@/lib/db/queries/analytics";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
@@ -42,6 +43,7 @@ export default async function AdminDocAnalyticsPage({
 }) {
   const { id } = await params;
 
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/docs/[id]/analytics");
@@ -174,4 +176,5 @@ export default async function AdminDocAnalyticsPage({
       </main>
     </div>
   );
+  });
 }

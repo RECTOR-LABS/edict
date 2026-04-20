@@ -6,6 +6,7 @@ import { ArrowLeft, Share2, Check } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { getDocById } from "@/lib/db/queries/docs";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 import { updateDocAction } from "@/actions/docs";
@@ -20,6 +21,7 @@ export default async function AdminDocEditPage({
 }) {
   const { id } = await params;
 
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/docs/[id]");
@@ -133,4 +135,5 @@ export default async function AdminDocEditPage({
       </main>
     </div>
   );
+  });
 }

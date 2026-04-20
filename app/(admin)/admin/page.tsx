@@ -7,6 +7,7 @@ import { listClients } from "@/lib/db/queries/clients";
 import { listDocs } from "@/lib/db/queries/docs";
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 
 // ── Internal sub-components ──────────────────────────────────────────────────
@@ -115,6 +116,7 @@ function ViewRow({ memberEmail, docTitle, viewedAt, nowMs }: ViewRowProps) {
 // ── Page (server component) ──────────────────────────────────────────────────
 
 export default async function AdminDashboard() {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin");
@@ -288,4 +290,5 @@ export default async function AdminDashboard() {
       </main>
     </div>
   );
+  });
 }

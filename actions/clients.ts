@@ -6,6 +6,7 @@ import type { Route } from "next";
 import { createClient } from "@/lib/db/queries/clients";
 import { writeAudit } from "@/lib/db/queries/audit";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 
 /**
  * Server action: create a new client (tenant).
@@ -18,6 +19,7 @@ import { getContext } from "@/lib/auth/context";
  * function in try/catch — callers must let the throw propagate.
  */
 export async function createClientAction(formData: FormData) {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
 
@@ -51,4 +53,5 @@ export async function createClientAction(formData: FormData) {
 
   // redirect() throws NEXT_REDIRECT — must not be inside try/catch.
   redirect(`/admin/clients/${c.id}` as Route);
+  });
 }

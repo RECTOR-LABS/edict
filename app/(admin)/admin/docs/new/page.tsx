@@ -5,6 +5,7 @@ import { ArrowLeft, Link2, Check } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { requireAdminSession } from "@/lib/auth/middleware";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 import { createDocAction } from "@/actions/docs";
 import { Field, SelectField, TextareaField } from "../_components/doc-form-fields";
@@ -12,6 +13,7 @@ import { Field, SelectField, TextareaField } from "../_components/doc-form-field
 // ── Page (server component) ──────────────────────────────────────────────────
 
 export default async function AdminDocsNewPage() {
+  return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
     throw new Error("unexpected: non-admin context in /admin/docs/new");
@@ -113,4 +115,5 @@ export default async function AdminDocsNewPage() {
       </main>
     </div>
   );
+  });
 }
