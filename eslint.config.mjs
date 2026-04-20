@@ -22,6 +22,14 @@ const config = [
       ],
     },
   },
+  // Playwright test fixtures use a `use` callback that is not a React hook.
+  // Disable react-hooks rules for the e2e test directory to prevent false positives.
+  {
+    files: ["tests/e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ];
 
 export default config;
