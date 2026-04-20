@@ -360,4 +360,54 @@ describe("GET /auth/verify route", () => {
     expect(session.ip).toBe("1.2.3.4");
     expect(session.userAgent).toBe("test-agent/1.0");
   });
+
+  // ── Test 9: Revoked member token ──────────────────────────────────────────
+  it("revoked member token → 200 invalid HTML, no cookie, no session inserted, magic_link_failed audit written", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb, schema } = dbModule!;
+    const { issueMagicLink } = await import("@/lib/auth/issue");
+    const { eq } = await import("drizzle-orm");
+
+    const [client] = await adminDb
+      .insert(schema.clients)
+      .values({ slug: "revoke-test-co", name: "Revoke Test Co" })
+      .returning();
+
+    const [member] = await adminDb
+      .insert(schema.clientMembers)
+      .values({ clientId: client!.id, email: "revoked@revoke-test.test", role: "viewer" })
+      .returning();
+
+    const { raw } = await issueMagicLink({
+      subjectType: "client_member",
+      subjectId: member!.id,
+      email: "revoked@revoke-test.test",
+      clientId: client!.id,
+    });
+
+    // Revoke the member after the token is issued — simulates the race window
+    // where a magic-link is in-flight when revocation happens.
+    await adminDb
+      .update(schema.clientMembers)
+      .set({ revokedAt: new Date() })
+      .where(eq(schema.clientMembers.id, member!.id));
+
+    const res = await GET(makeRequest(raw));
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("This link is no longer valid");
+    expect(res.headers.get("set-cookie")).toBeNull();
+
+    // No session was created.
+    const sessions = await adminDb.query.sessions.findMany({});
+    expect(sessions).toHaveLength(0);
+
+    // magic_link_failed audit written with member_revoked reason.
+    const audits = await adminDb.query.auditLog.findMany({
+      where: (a, { eq: eqFn }) => eqFn(a.eventType, "magic_link_failed"),
+    });
+    expect(audits).toHaveLength(1);
+    expect((audits[0]!.metadata as Record<string, unknown>)["reason"]).toBe("member_revoked");
+  });
 });

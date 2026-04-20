@@ -3,6 +3,8 @@ import { generateToken } from "@/lib/auth/tokens";
 import { consumeMagicLinkToken } from "@/lib/db/queries/tokens";
 import { insertSession } from "@/lib/db/queries/sessions";
 import { writeAudit } from "@/lib/db/queries/audit";
+import { adminDb, schema } from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -41,6 +43,30 @@ export async function verifyMagicLink(input: {
 
   if (consumed.subjectType !== "client_member" && consumed.subjectType !== "admin") {
     return { ok: false, reason: "invalid" };
+  }
+
+  // Guard: reject revoked members. A revoked member has no right to establish a
+  // new session regardless of token validity. This closes the window where an
+  // admin issues a revocation but a pre-sent magic-link remains consumable.
+  if (consumed.subjectType === "client_member") {
+    const member = await adminDb.query.clientMembers.findFirst({
+      where: eq(schema.clientMembers.id, consumed.subjectId),
+      columns: { revokedAt: true },
+    });
+    if (!member || member.revokedAt !== null) {
+      await writeAudit({
+        eventType: "magic_link_failed",
+        actorType: "system",
+        metadata: {
+          token_hash_prefix: tokenHash.slice(0, 8),
+          reason: "member_revoked",
+          subject_id: consumed.subjectId,
+        },
+        ip: input.ip ?? null,
+        userAgent: input.userAgent ?? null,
+      });
+      return { ok: false, reason: "invalid" };
+    }
   }
 
   const session = generateToken(64);
