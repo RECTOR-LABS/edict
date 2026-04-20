@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
+import { revokeSessionsForSubject } from "@/lib/db/queries/sessions";
 
 export async function listMembersForClient(clientId: string) {
   return adminDb.query.clientMembers.findMany({
@@ -39,9 +40,18 @@ export async function upsertMember(input: {
   return row;
 }
 
+/**
+ * Revoke a client member and atomically invalidate all their active sessions
+ * (spec §5.4). Both writes happen in a single transaction — no partial state
+ * on failure.
+ */
 export async function revokeMember(memberId: string) {
-  await adminDb
-    .update(schema.clientMembers)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(schema.clientMembers.id, memberId), isNull(schema.clientMembers.revokedAt)));
+  await adminDb.transaction(async (tx) => {
+    await tx
+      .update(schema.clientMembers)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(schema.clientMembers.id, memberId), isNull(schema.clientMembers.revokedAt)));
+
+    await revokeSessionsForSubject("client_member", memberId, tx);
+  });
 }

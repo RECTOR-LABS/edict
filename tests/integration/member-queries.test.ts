@@ -9,6 +9,7 @@ import type {
   upsertMember,
   revokeMember,
 } from "@/lib/db/queries/members";
+import type { revokeSessionsForSubject } from "@/lib/db/queries/sessions";
 
 let pg: StartedPostgreSqlContainer;
 let dbModule: typeof DbModule | undefined;
@@ -16,6 +17,9 @@ let queries: {
   listMembersForClient: typeof listMembersForClient;
   upsertMember: typeof upsertMember;
   revokeMember: typeof revokeMember;
+};
+let sessionQueries: {
+  revokeSessionsForSubject: typeof revokeSessionsForSubject;
 };
 
 beforeAll(async () => {
@@ -40,6 +44,7 @@ beforeAll(async () => {
   // Dynamic imports AFTER env is set.
   dbModule = await import("@/lib/db");
   queries = await import("@/lib/db/queries/members");
+  sessionQueries = await import("@/lib/db/queries/sessions");
 }, 60_000);
 
 afterAll(async () => {
@@ -50,9 +55,10 @@ afterAll(async () => {
   await pg?.stop();
 });
 
-// Truncate clients before each test — cascade clears client_members too.
+// Truncate data before each test. Sessions must be deleted before clients (FK constraint).
 beforeEach(async () => {
   if (!dbModule) return;
+  await dbModule.adminDb.delete(dbModule.schema.sessions);
   await dbModule.adminDb.delete(dbModule.schema.clients);
 });
 
@@ -282,5 +288,99 @@ describe("revokeMember()", () => {
     expect(requeried).toBeDefined();
     // revokedAt must still be the original past timestamp, not refreshed to now().
     expect(requeried!.revokedAt!.toISOString()).toBe(pastTimestamp.toISOString());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// revokeMember() — session cascade (spec §5.4)
+// ---------------------------------------------------------------------------
+
+// Helper: insert a session row directly for a given subject.
+async function seedSession(
+  subjectType: "client_member" | "admin",
+  subjectId: string,
+  clientId: string | null,
+  overrides: { revokedAt?: Date | null } = {},
+) {
+  const { adminDb, schema } = dbModule!;
+  const tokenHash = `test-token-${Math.random().toString(36).slice(2)}`;
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  const [row] = await adminDb
+    .insert(schema.sessions)
+    .values({
+      sessionTokenHash: tokenHash,
+      subjectType,
+      subjectId,
+      clientId,
+      expiresAt,
+      revokedAt: overrides.revokedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("seed session failed");
+  return row;
+}
+
+describe("revokeMember() — session cascade", () => {
+  it("revoking a member marks all their active sessions as revoked", async () => {
+    const { adminDb, schema } = dbModule!;
+    const client = await seedClient("cascade-basic");
+    const member = await seedMember(client.id, "cascade@test.com");
+
+    const session1 = await seedSession("client_member", member.id, client.id);
+    const session2 = await seedSession("client_member", member.id, client.id);
+
+    await queries.revokeMember(member.id);
+
+    const rows = await adminDb
+      .select()
+      .from(schema.sessions)
+      .then((rs) => rs.filter((r) => r.subjectId === member.id));
+
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.revokedAt).not.toBeNull();
+    }
+    // Confirm both specific sessions were hit.
+    const ids = rows.map((r) => r.id);
+    expect(ids).toContain(session1.id);
+    expect(ids).toContain(session2.id);
+  });
+
+  it("does not revoke sessions belonging to other members (isolation)", async () => {
+    const { adminDb, schema } = dbModule!;
+    const client = await seedClient("cascade-isolation");
+    const revokedMember = await seedMember(client.id, "revoked@test.com");
+    const otherMember = await seedMember(client.id, "other@test.com");
+
+    await seedSession("client_member", revokedMember.id, client.id);
+    const otherSession = await seedSession("client_member", otherMember.id, client.id);
+
+    await queries.revokeMember(revokedMember.id);
+
+    const otherRow = await adminDb.query.sessions.findFirst({
+      where: (s, { eq }) => eq(s.id, otherSession.id),
+    });
+    expect(otherRow).toBeDefined();
+    // Other member's session must remain active.
+    expect(otherRow!.revokedAt).toBeNull();
+  });
+
+  it("already-revoked sessions are not double-revoked (idempotent for sessions)", async () => {
+    const { adminDb, schema } = dbModule!;
+    const client = await seedClient("cascade-already-revoked-session");
+    const member = await seedMember(client.id, "already-revoked-session@test.com");
+    const pastTimestamp = new Date("2025-01-01T00:00:00Z");
+    const alreadyRevoked = await seedSession("client_member", member.id, client.id, {
+      revokedAt: pastTimestamp,
+    });
+
+    await queries.revokeMember(member.id);
+
+    const row = await adminDb.query.sessions.findFirst({
+      where: (s, { eq }) => eq(s.id, alreadyRevoked.id),
+    });
+    expect(row).toBeDefined();
+    // The WHERE clause filters isNull(revokedAt) — already-revoked sessions are not touched.
+    expect(row!.revokedAt!.toISOString()).toBe(pastTimestamp.toISOString());
   });
 });
