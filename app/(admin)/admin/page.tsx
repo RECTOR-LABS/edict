@@ -1,12 +1,13 @@
 import { eq, isNull, desc, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { Route } from "next";
-import { Users, FileText, Eye, Share2, ArrowRight, ShieldCheck } from "lucide-react";
+import { Users, FileText, Eye, Share2, ArrowRight } from "lucide-react";
 
 import { listClients } from "@/lib/db/queries/clients";
 import { listDocs } from "@/lib/db/queries/docs";
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
+import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 
 // ── Internal sub-components ──────────────────────────────────────────────────
 
@@ -180,39 +181,7 @@ export default async function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#06060c] text-white font-sans">
-      {/* ── Top nav ── */}
-      <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[rgba(255,255,255,0.08)] bg-[#06060c]/90 px-6 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          {/* Pulsing status dot — live-ops console indicator */}
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00e5ff] opacity-75" />
-            <span
-              className="relative inline-flex h-2 w-2 rounded-full bg-[#00e5ff]"
-              style={{ boxShadow: "0 0 6px #00e5ff" }}
-            />
-          </span>
-          <span className="font-mono text-sm font-bold tracking-[0.2em] text-white">
-            EDICT{" "}
-            <span className="text-[#00e5ff]/50">/</span>{" "}
-            ADMIN
-          </span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 font-mono text-xs text-[#8a8a93]">
-            <ShieldCheck size={13} strokeWidth={1.5} className="text-[#00e5ff]" />
-            {adminEmail}
-          </span>
-          <form action="/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="font-mono text-xs text-[#8a8a93] transition-colors duration-150 hover:text-white"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </header>
+      <AdminNav adminEmail={adminEmail} />
 
       {/* ── Main content ── */}
       <main className="mx-auto max-w-5xl px-6 py-10">
