@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { ArrowUpRight, Clock, FileQuestion } from "lucide-react";
 
 import { getContext } from "@/lib/auth/context";
+import { requireClientSession } from "@/lib/auth/middleware";
 import { getClientBySlug } from "@/lib/db/queries/clients";
 import { listDocsForClientWithLastViewed } from "@/lib/db/queries/docs";
 import { notFound } from "next/navigation";
@@ -109,108 +110,112 @@ export default async function ClientDashboardPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const ctx = getContext();
-  if (ctx.kind !== "client") {
-    throw new Error("client only: unexpected context kind in /c/[slug]");
-  }
-
   const { slug } = await params;
-  const tenant = await getClientBySlug(slug);
-  if (!tenant) notFound();
+  // requireClientSession sets up ALS context and is deduplicated per-request by
+  // React cache() — the layout calls it too, but only one DB round-trip occurs.
+  return requireClientSession(slug, async () => {
+    const ctx = getContext();
+    if (ctx.kind !== "client") {
+      throw new Error("client only: unexpected context kind in /c/[slug]");
+    }
 
-  const docs = await listDocsForClientWithLastViewed(ctx.clientId, ctx.memberId);
+    const tenant = await getClientBySlug(slug);
+    if (!tenant) notFound();
 
-  return (
-    <>
-      {/*
-        Styles:
-        - .doc-card — fade-up entrance animation
-        - .doc-card::after — tenant-color hover glow border
-        - .new-pulse — tenant-color pulsing dot animation
-        - ::selection — tenant-color text selection
-      */}
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .doc-card {
-          opacity: 0;
-          animation: fadeUp 0.35s ease forwards;
-        }
-        .doc-card::after {
-          content: '';
-          position: absolute;
-          inset: -1px;
-          border-radius: inherit;
-          padding: 1px;
-          background: linear-gradient(
-            135deg,
-            var(--tenant-color, #00e5ff),
-            transparent 60%
-          );
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          opacity: 0;
-          transition: opacity 0.2s ease;
-          pointer-events: none;
-        }
-        .doc-card:hover::after {
-          opacity: 1;
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-        .new-pulse {
-          animation: pulse 1.8s ease-in-out infinite;
-        }
-        ::selection {
-          background: var(--tenant-color, #00e5ff);
-          color: #06060c;
-        }
-      `}</style>
+    const docs = await listDocsForClientWithLastViewed(ctx.clientId, ctx.memberId);
 
-      <main className="mx-auto max-w-4xl px-10 py-10">
-        {/* Page header */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Your edicts</h1>
-          <p className="mt-2 text-base text-[#8a8a93]">Documents issued to {tenant.name}</p>
-        </div>
+    return (
+      <>
+        {/*
+          Styles:
+          - .doc-card — fade-up entrance animation
+          - .doc-card::after — tenant-color hover glow border
+          - .new-pulse — tenant-color pulsing dot animation
+          - ::selection — tenant-color text selection
+        */}
+        <style>{`
+          @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .doc-card {
+            opacity: 0;
+            animation: fadeUp 0.35s ease forwards;
+          }
+          .doc-card::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(
+              135deg,
+              var(--tenant-color, #00e5ff),
+              transparent 60%
+            );
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+          }
+          .doc-card:hover::after {
+            opacity: 1;
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+          }
+          .new-pulse {
+            animation: pulse 1.8s ease-in-out infinite;
+          }
+          ::selection {
+            background: var(--tenant-color, #00e5ff);
+            color: #06060c;
+          }
+        `}</style>
 
-        {/* Doc list or empty state */}
-        {docs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <FileQuestion
-              size={48}
-              strokeWidth={1}
-              className="mb-5 text-white"
-              style={{ opacity: 0.2 }}
-              aria-hidden="true"
-            />
-            <h3 className="text-2xl font-semibold text-white">No edicts yet.</h3>
-            <p className="mt-2 max-w-sm text-sm text-[#8a8a93]">
-              When {tenant.name} issues documents, they appear here.
-            </p>
+        <main className="mx-auto max-w-4xl px-10 py-10">
+          {/* Page header */}
+          <div className="mb-10">
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Your edicts</h1>
+            <p className="mt-2 text-base text-[#8a8a93]">Documents issued to {tenant.name}</p>
           </div>
-        ) : (
-          <ol className="flex flex-col gap-3" aria-label="Your edicts">
-            {docs.map((doc, i) => (
-              <li key={doc.id}>
-                <DocCard
-                  slug={doc.slug}
-                  title={doc.title}
-                  bodyType={doc.bodyType}
-                  lastViewedAt={doc.lastViewedAt}
-                  clientSlug={slug}
-                  index={i}
-                />
-              </li>
-            ))}
-          </ol>
-        )}
-      </main>
-    </>
-  );
+
+          {/* Doc list or empty state */}
+          {docs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <FileQuestion
+                size={48}
+                strokeWidth={1}
+                className="mb-5 text-white"
+                style={{ opacity: 0.2 }}
+                aria-hidden="true"
+              />
+              <h3 className="text-2xl font-semibold text-white">No edicts yet.</h3>
+              <p className="mt-2 max-w-sm text-sm text-[#8a8a93]">
+                When {tenant.name} issues documents, they appear here.
+              </p>
+            </div>
+          ) : (
+            <ol className="flex flex-col gap-3" aria-label="Your edicts">
+              {docs.map((doc, i) => (
+                <li key={doc.id}>
+                  <DocCard
+                    slug={doc.slug}
+                    title={doc.title}
+                    bodyType={doc.bodyType}
+                    lastViewedAt={doc.lastViewedAt}
+                    clientSlug={slug}
+                    index={i}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+        </main>
+      </>
+    );
+  });
 }

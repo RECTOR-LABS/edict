@@ -1,4 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import { config as loadEnv } from "dotenv";
+
+// Playwright worker processes run outside Next.js, so .env is not auto-loaded.
+// Load it here (at config parse time) so DATABASE_URL is available to fixtures.
+loadEnv();
 
 export default defineConfig({
   testDir: "./tests/e2e",

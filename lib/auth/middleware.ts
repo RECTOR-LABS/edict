@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { sha256Hex } from "@/lib/utils/hash";
@@ -8,13 +9,26 @@ import { runWithContext, type EdictContext } from "@/lib/auth/context";
 
 const COOKIE = process.env.SESSION_COOKIE_NAME ?? "edict_session";
 
-async function resolveSession() {
+/**
+ * React cache() deduplicates this per-request. Both layout and page call
+ * requireClientSession/requireAdminSession on every render — cache() ensures
+ * the DB lookup (findActiveSessionByTokenHash) only runs once per RSC request,
+ * regardless of how many server components call it.
+ *
+ * Background: Next.js App Router renders layout and page components in separate
+ * React fiber tasks. AsyncLocalStorage context set in the layout's
+ * runWithContext() callback does not propagate to the page component because
+ * React schedules page rendering outside the layout's async continuation. The
+ * fix is to have each component resolve its own session and rely on React cache()
+ * to collapse the redundant DB round-trips.
+ */
+const resolveSession = cache(async () => {
   const jar = await cookies();
   const raw = jar.get(COOKIE)?.value;
   if (!raw) return null;
   const s = await findActiveSessionByTokenHash(sha256Hex(raw));
   return s;
-}
+});
 
 export async function requireAdminSession<T>(fn: () => Promise<T>): Promise<T> {
   const s = await resolveSession();

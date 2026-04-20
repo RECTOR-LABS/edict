@@ -3,6 +3,9 @@ import nextTs from "eslint-config-next/typescript";
 import prettier from "eslint-config-prettier/flat";
 
 const config = [
+  // Ignore Playwright report artifacts — gitignored generated files that must
+  // not be linted (they contain minified third-party JS that triggers many rules).
+  { ignores: ["playwright-report/**", "test-results/**"] },
   ...nextVitals,
   ...nextTs,
   prettier,
