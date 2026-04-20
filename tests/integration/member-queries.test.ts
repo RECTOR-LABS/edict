@@ -9,7 +9,6 @@ import type {
   upsertMember,
   revokeMember,
 } from "@/lib/db/queries/members";
-import type { revokeSessionsForSubject } from "@/lib/db/queries/sessions";
 
 let pg: StartedPostgreSqlContainer;
 let dbModule: typeof DbModule | undefined;
@@ -17,9 +16,6 @@ let queries: {
   listMembersForClient: typeof listMembersForClient;
   upsertMember: typeof upsertMember;
   revokeMember: typeof revokeMember;
-};
-let sessionQueries: {
-  revokeSessionsForSubject: typeof revokeSessionsForSubject;
 };
 
 beforeAll(async () => {
@@ -44,7 +40,6 @@ beforeAll(async () => {
   // Dynamic imports AFTER env is set.
   dbModule = await import("@/lib/db");
   queries = await import("@/lib/db/queries/members");
-  sessionQueries = await import("@/lib/db/queries/sessions");
 }, 60_000);
 
 afterAll(async () => {
@@ -347,7 +342,7 @@ describe("revokeMember() — session cascade", () => {
   });
 
   it("does not revoke sessions belonging to other members (isolation)", async () => {
-    const { adminDb, schema } = dbModule!;
+    const { adminDb } = dbModule!;
     const client = await seedClient("cascade-isolation");
     const revokedMember = await seedMember(client.id, "revoked@test.com");
     const otherMember = await seedMember(client.id, "other@test.com");
@@ -366,7 +361,7 @@ describe("revokeMember() — session cascade", () => {
   });
 
   it("already-revoked sessions are not double-revoked (idempotent for sessions)", async () => {
-    const { adminDb, schema } = dbModule!;
+    const { adminDb } = dbModule!;
     const client = await seedClient("cascade-already-revoked-session");
     const member = await seedMember(client.id, "already-revoked-session@test.com");
     const pastTimestamp = new Date("2025-01-01T00:00:00Z");
