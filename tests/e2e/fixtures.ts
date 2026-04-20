@@ -56,6 +56,9 @@ export const test = base.extend<{ seed: Seed }>({
   seed: async ({}, use) => {
     // Wipe then seed — tests assume fully fresh state on every run.
     // Delete in dependency order (children before parents) to avoid FK violations.
+    // rate_limit_events is self-contained (no FK refs) but must wipe to prevent
+    // prior-run buckets (e.g. /auth/verify 10/hour/email) from causing 429s.
+    await adminDb.delete(schema.rateLimitEvents);
     await adminDb.delete(schema.auditLog);
     await adminDb.delete(schema.sessions);
     await adminDb.delete(schema.magicLinkTokens);
