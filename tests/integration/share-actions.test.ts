@@ -119,6 +119,9 @@ beforeEach(async () => {
   if (!dbModule) return;
   const { adminDb, schema } = dbModule;
   // FK-safe order: audit_log → magic_link_tokens → client_members → doc_shares → docs
+  // rate_limit_events wiped to avoid cross-test accumulation now that
+  // shareDocAction throttles per-admin (30/hour cap).
+  await adminDb.delete(schema.rateLimitEvents);
   await adminDb.delete(schema.auditLog);
   await adminDb.delete(schema.magicLinkTokens);
   await adminDb.delete(schema.clientMembers);

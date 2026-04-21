@@ -7,10 +7,17 @@ import { MagicLinkEmail } from "@/lib/mail/templates/magic-link";
 import { and, eq, isNull } from "drizzle-orm";
 import React from "react";
 import { writeAudit } from "@/lib/db/queries/audit";
+import { rateLimitAllow } from "@/lib/db/queries/rate-limit";
 
 export async function requestMagicLinkAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) return;
+
+  // Rate-limit: 10 send attempts per email per hour. Silent success on throttle
+  // keeps the enumeration-defense posture — attacker cannot distinguish
+  // "throttled" from "unknown email" or "sent successfully."
+  const allowed = await rateLimitAllow(`verify:email:${email}`, 10, 60 * 60 * 1000);
+  if (!allowed) return;
 
   // 1) Admins (no tenant scope)
   const admin = await adminDb.query.admins.findFirst({

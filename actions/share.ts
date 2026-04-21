@@ -13,11 +13,17 @@ import { sendMail } from "@/lib/mail/resend";
 import { MagicLinkEmail } from "@/lib/mail/templates/magic-link";
 import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
+import { rateLimitAllow } from "@/lib/db/queries/rate-limit";
 
 export async function shareDocAction(formData: FormData) {
   return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") throw new Error("admin only");
+
+  // Rate-limit: 30 shares per admin per hour. Admin-gated so we throw a
+  // visible error rather than silently dropping (unlike the landing page).
+  const allowed = await rateLimitAllow(`share:admin:${ctx.adminId}`, 30, 60 * 60 * 1000);
+  if (!allowed) throw new Error("rate limit exceeded — try again shortly");
 
   const docId = String(formData.get("docId"));
   const clientId = String(formData.get("clientId"));

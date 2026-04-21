@@ -54,6 +54,9 @@ beforeEach(async () => {
   const { adminDb, schema } = dbModule;
   // Reset: audit_log, magic_link_tokens, sessions have no FK to clients/admins/client_members
   // that would block truncation. Truncate in dependency-safe order.
+  // rate_limit_events wiped to avoid cross-test accumulation now that
+  // requestMagicLinkAction throttles per-email (10/hour cap).
+  await adminDb.delete(schema.rateLimitEvents);
   await adminDb.delete(schema.auditLog);
   await adminDb.delete(schema.magicLinkTokens);
   await adminDb.delete(schema.sessions);
