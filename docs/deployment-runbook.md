@@ -24,7 +24,7 @@ All required in the VPS `.env` file before first `docker compose up`:
 | Variable | Example | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgres://edict_app:<pass>@db:5432/edict` | **Must use `@db:5432`** — Docker network hostname, NOT `127.0.0.1:5432` (that's the host loopback, unreachable from inside a container). |
-| `DATABASE_ADMIN_URL` | `postgres://edict_admin_role:<pass>@db:5432/edict` | Admin pool for migrations, admin UI, audit writes. Uses `edict_admin_role` (BYPASSRLS, no superuser privileges) — created by `migrations/0002_rls.sql`. The default password is `dev`; rotate post-install if desired (see Known Gotchas). |
+| `DATABASE_ADMIN_URL` | `postgres://edict_admin:<POSTGRES_ADMIN_PASSWORD>@db:5432/edict` | Admin pool for migrations + runtime admin queries + audit writes. Uses the `edict_admin` POSTGRES superuser (created by compose's `POSTGRES_USER`/`POSTGRES_PASSWORD` at container init). SUPERUSER is required because `migrations/0002_rls.sql` runs `CREATE ROLE` — the narrower `edict_admin_role` it creates cannot bootstrap itself. Password = the random `POSTGRES_ADMIN_PASSWORD` value. |
 | `POSTGRES_ADMIN_PASSWORD` | `<random 32+ chars>` | Read by compose via `${...:?}` substitution — fails fast if unset. Generate with `openssl rand -base64 32`. |
 | `APP_URL` | `https://edict.rectorspace.com` | Magic-link origin; used in email templates. |
 | `SESSION_COOKIE_NAME` | `edict_session` | Default; change only if you know why. |
@@ -257,12 +257,10 @@ docker compose -f docker-compose.prod.yml exec -T db psql -U edict_admin -d edic
 
 1. **DATABASE_URL must use `@db:5432`, not `@127.0.0.1:5432`** — the app container reaches postgres over the compose network, not the host loopback. Wrong URL manifests as `ECONNREFUSED` on first `pnpm db:migrate`.
 
-2. **`edict_admin_role` password hardcoded as `dev` in migration** — `migrations/0002_rls.sql` creates `edict_admin_role` with password `dev`. Since the DB is only reachable from inside the Docker compose network (no host port bind per Task 52), this is defensible — an attacker must already have app-container access (and thus `DATABASE_ADMIN_URL` from env) to reach the DB. If belt-and-suspenders hardening is desired, run:
-   ```
-   docker compose -f docker-compose.prod.yml exec -T db psql -U edict_admin -d edict \
-     -c "ALTER USER edict_admin_role WITH PASSWORD '<new-prod-password>';"
-   ```
-   Then update `DATABASE_ADMIN_URL` in the VPS `.env` accordingly and restart the app: `docker compose -f docker-compose.prod.yml up -d app`.
+2. **`edict_admin_role` is unused — chicken-and-egg on migration bootstrap** — `migrations/0002_rls.sql` creates a BYPASSRLS role `edict_admin_role` with intent to be the runtime admin identity (narrower than the superuser). But `drizzle-kit migrate` running `0002_rls.sql` requires SUPERUSER to execute `CREATE ROLE`; the role it's creating cannot bootstrap itself. For now `DATABASE_ADMIN_URL` uses the `edict_admin` superuser for both migration and runtime admin queries. To phase in the narrower role post-launch without refactor:
+   - Run the first migration with the superuser (as documented).
+   - Then `ALTER USER edict_admin_role WITH PASSWORD '<rotated-pass>';`
+   - Split env into `DATABASE_MIGRATION_URL` (superuser) + `DATABASE_ADMIN_URL` (edict_admin_role), update drizzle.config.ts to read the migration URL, and `lib/db/index.ts` to keep using `DATABASE_ADMIN_URL`. Phase 2 hygiene.
 
 3. **Migration-on-startup race** — `CMD ["sh", "-c", "pnpm db:migrate && exec pnpm start"]` runs migrations on every container start. Fine for single instance. If Phase J scales to multiple app containers, extract migrations into a one-shot init container (`deploy.init`) and have the app service depend on its successful completion.
 
