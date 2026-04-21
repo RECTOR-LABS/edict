@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776584786756,
+      "tag": "0000_heavy_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776584967236,
+      "tag": "0001_session_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776585179948,
+      "tag": "0002_rls",
+      "breakpoints": true
+    }
+  ]
+}

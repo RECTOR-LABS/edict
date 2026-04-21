@@ -13,6 +13,9 @@ build/
 .vercel/
 out/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Environment
 .env
 .env.local
@@ -59,3 +62,12 @@ package-lock.json
 
 # Claude
 .claude/settings.local.json
+
+# Playwright
+/playwright-report/
+/test-results/
+/tests/e2e/playwright-report/
+/tests/e2e/test-results/
+
+# Postgres backup dumps (bind-mounted in docker-compose.prod.yml)
+/backups/

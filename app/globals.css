@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --tenant-color: #00e5ff;
+}
+
+html,
+body {
+  background: #06060c;
+  color: #e2e8f0;
+  font-family: system-ui, sans-serif;
+}
+
+::selection {
+  background-color: #00e5ff;
+  color: #000000;
+}
+
+/* Override WebKit autofill background to match input surface */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #0b0b12 inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
