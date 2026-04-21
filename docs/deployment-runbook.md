@@ -24,7 +24,7 @@ All required in the VPS `.env` file before first `docker compose up`:
 | Variable | Example | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgres://edict_app:<pass>@db:5432/edict` | **Must use `@db:5432`** — Docker network hostname, NOT `127.0.0.1:5432` (that's the host loopback, unreachable from inside a container). |
-| `DATABASE_ADMIN_URL` | `postgres://edict_admin:<pass>@db:5432/edict` | Admin pool for migrations, admin UI, audit writes. Set to `edict_admin_role` in place of `edict_admin` when that role reroute lands (see Known Gotchas). |
+| `DATABASE_ADMIN_URL` | `postgres://edict_admin_role:<pass>@db:5432/edict` | Admin pool for migrations, admin UI, audit writes. Uses `edict_admin_role` (BYPASSRLS, no superuser privileges) — created by `migrations/0002_rls.sql`. The default password is `dev`; rotate post-install if desired (see Known Gotchas). |
 | `POSTGRES_ADMIN_PASSWORD` | `<random 32+ chars>` | Read by compose via `${...:?}` substitution — fails fast if unset. Generate with `openssl rand -base64 32`. |
 | `APP_URL` | `https://edict.rectorspace.com` | Magic-link origin; used in email templates. |
 | `SESSION_COOKIE_NAME` | `edict_session` | Default; change only if you know why. |
@@ -257,7 +257,12 @@ docker compose -f docker-compose.prod.yml exec -T db psql -U edict_admin -d edic
 
 1. **DATABASE_URL must use `@db:5432`, not `@127.0.0.1:5432`** — the app container reaches postgres over the compose network, not the host loopback. Wrong URL manifests as `ECONNREFUSED` on first `pnpm db:migrate`.
 
-2. **`edict_admin_role` vs `edict_admin` superuser** — migration `0002_rls.sql` creates `edict_admin_role` (BYPASSRLS) but `.env.example` + docker-compose point at the `edict_admin` superuser directly. Production should reroute `DATABASE_ADMIN_URL` to `edict_admin_role` for narrower privileges. Deferred from Phase B; address before Phase J public launch.
+2. **`edict_admin_role` password hardcoded as `dev` in migration** — `migrations/0002_rls.sql` creates `edict_admin_role` with password `dev`. Since the DB is only reachable from inside the Docker compose network (no host port bind per Task 52), this is defensible — an attacker must already have app-container access (and thus `DATABASE_ADMIN_URL` from env) to reach the DB. If belt-and-suspenders hardening is desired, run:
+   ```
+   docker compose -f docker-compose.prod.yml exec -T db psql -U edict_admin -d edict \
+     -c "ALTER USER edict_admin_role WITH PASSWORD '<new-prod-password>';"
+   ```
+   Then update `DATABASE_ADMIN_URL` in the VPS `.env` accordingly and restart the app: `docker compose -f docker-compose.prod.yml up -d app`.
 
 3. **Migration-on-startup race** — `CMD ["sh", "-c", "pnpm db:migrate && exec pnpm start"]` runs migrations on every container start. Fine for single instance. If Phase J scales to multiple app containers, extract migrations into a one-shot init container (`deploy.init`) and have the app service depend on its successful completion.
 
