@@ -70,6 +70,8 @@ USER node
 EXPOSE 3000
 
 # Run migrations then start the server.
+# `exec` replaces the shell with `pnpm start` so SIGTERM from `docker stop`
+# reaches Next.js directly (graceful shutdown) instead of being swallowed by sh.
 # Phase I = single instance, so migration-on-startup is safe.
 # For multi-instance scale-out, extract migrations to a one-shot init container.
-CMD ["sh", "-c", "pnpm db:migrate && pnpm start"]
+CMD ["sh", "-c", "pnpm db:migrate && exec pnpm start"]
