@@ -162,7 +162,7 @@ export default async function AdminDashboard() {
     .limit(5);
 
   // Snapshot of now for ViewRow isRecent comparison.
-  // eslint-disable-next-line react-hooks/purity -- server component, no re-renders; Date.now() is safe here.
+  // Server component, no re-renders — Date.now() is safe here.
   const nowMs = Date.now();
 
   // Recent views (top 5). auditLog.docId is a direct FK column — no json extraction needed.
