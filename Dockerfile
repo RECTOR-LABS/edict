@@ -61,6 +61,11 @@ COPY --from=build /app/scripts ./scripts
 # lib/ (drizzle-kit reads schema path from drizzle.config.ts → ./lib/db/schema.ts)
 COPY --from=build /app/lib ./lib
 
+# tsconfig.json — required so tsx (running scripts like edict:admin:seed) can
+# resolve the `@/*` path alias. Without this, scripts crash with
+# ERR_MODULE_NOT_FOUND: Cannot find package '@/lib'.
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+
 # Manifest
 COPY --from=build /app/package.json ./package.json
 
