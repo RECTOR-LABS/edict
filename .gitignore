@@ -68,3 +68,6 @@ package-lock.json
 /test-results/
 /tests/e2e/playwright-report/
 /tests/e2e/test-results/
+
+# Postgres backup dumps (bind-mounted in docker-compose.prod.yml)
+/backups/
