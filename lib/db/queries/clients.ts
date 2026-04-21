@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
 
@@ -30,6 +31,11 @@ export async function getClientById(id: string) {
   return adminDb.query.clients.findFirst({ where: eq(schema.clients.id, id) });
 }
 
-export async function getClientBySlug(slug: string) {
+/**
+ * Request-scoped cache: the client layout + dashboard page both resolve the
+ * tenant record by slug on every request. React.cache() dedupes the DB round
+ * trip so layout and page share one fetch instead of hitting the pool twice.
+ */
+export const getClientBySlug = cache(async (slug: string) => {
   return adminDb.query.clients.findFirst({ where: eq(schema.clients.slug, slug) });
-}
+});
