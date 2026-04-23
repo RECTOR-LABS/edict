@@ -21,7 +21,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "edict:admin:seed": "tsx scripts/admin-seed.ts",
-    "edict:admin:invite": "tsx scripts/admin-invite.ts"
+    "edict:admin:invite": "tsx scripts/admin-invite.ts",
+    "edict:admin:share": "tsx scripts/admin-share.ts"
   },
   "dependencies": {
     "@oslojs/crypto": "^1.0.1",
