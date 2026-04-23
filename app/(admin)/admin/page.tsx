@@ -44,13 +44,14 @@ function SummaryCard({ label, count, icon, href }: SummaryCardProps) {
 }
 
 type ShareRowProps = {
+  docId: string;
   docTitle: string;
   clientName: string;
   clientSlug: string;
   sharedAt: Date;
 };
 
-function ShareRow({ docTitle, clientName, clientSlug, sharedAt }: ShareRowProps) {
+function ShareRow({ docId, docTitle, clientName, clientSlug, sharedAt }: ShareRowProps) {
   const ts = sharedAt.toISOString().replace("T", " ").slice(0, 16) + " UTC";
   return (
     <div className="group grid grid-cols-[1fr_1.5fr_auto] items-center gap-4 border-b border-[rgba(255,255,255,0.06)] px-4 py-3 last:border-b-0 relative">
@@ -60,10 +61,13 @@ function ShareRow({ docTitle, clientName, clientSlug, sharedAt }: ShareRowProps)
         aria-hidden="true"
       />
 
-      <span className="flex items-center gap-2 truncate text-sm text-white">
+      <Link
+        href={`/admin/docs/${docId}` as Route}
+        className="flex items-center gap-2 truncate text-sm text-white transition-colors duration-150 hover:text-[#00e5ff]"
+      >
         <FileText size={13} strokeWidth={1.5} className="shrink-0 text-[#8a8a93]" />
         <span className="truncate">{docTitle}</span>
-      </span>
+      </Link>
 
       <Link
         href={`/admin/clients/${clientSlug}` as Route}
@@ -79,13 +83,14 @@ function ShareRow({ docTitle, clientName, clientSlug, sharedAt }: ShareRowProps)
 
 type ViewRowProps = {
   memberEmail: string;
+  docId: string;
   docTitle: string;
   viewedAt: Date;
   /** Snapshot of Date.now() from the parent — avoids calling an impure function inside render. */
   nowMs: number;
 };
 
-function ViewRow({ memberEmail, docTitle, viewedAt, nowMs }: ViewRowProps) {
+function ViewRow({ memberEmail, docId, docTitle, viewedAt, nowMs }: ViewRowProps) {
   const ts = viewedAt.toISOString().replace("T", " ").slice(0, 16) + " UTC";
   // Status dot: cyan if viewed in the last 5 minutes, muted otherwise.
   const isRecent = nowMs - viewedAt.getTime() < 5 * 60 * 1_000;
@@ -106,7 +111,12 @@ function ViewRow({ memberEmail, docTitle, viewedAt, nowMs }: ViewRowProps) {
         <span className="truncate font-mono text-xs text-[#8a8a93]">{memberEmail}</span>
       </span>
 
-      <span className="truncate text-sm text-white">{docTitle}</span>
+      <Link
+        href={`/admin/docs/${docId}` as Route}
+        className="truncate text-sm text-white transition-colors duration-150 hover:text-[#00e5ff]"
+      >
+        {docTitle}
+      </Link>
 
       <span className="font-mono text-[11px] text-[#8a8a93] tabular-nums">{ts}</span>
     </div>
@@ -139,7 +149,11 @@ export default async function AdminDashboard() {
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.auditLog)
       .where(
+        // Filter to phase='open' so each visit counts once. ViewBeacon writes
+        // two audit rows per visit (open on mount, close on unmount carrying
+        // duration_ms) — counting both would double every number.
         sql`${schema.auditLog.eventType} = 'doc_viewed'
+            AND ${schema.auditLog.metadata}->>'phase' = 'open'
             AND ${schema.auditLog.createdAt} > now() - interval '7 days'`,
       ),
   ]);
@@ -149,6 +163,7 @@ export default async function AdminDashboard() {
   // Recent shares (top 5, non-revoked).
   const recentShares = await adminDb
     .select({
+      docId: schema.docs.id,
       docTitle: schema.docs.title,
       clientName: schema.clients.name,
       clientSlug: schema.clients.slug,
@@ -165,19 +180,24 @@ export default async function AdminDashboard() {
   // Server component, no re-renders — Date.now() is safe here.
   const nowMs = Date.now();
 
-  // Recent views (top 5). auditLog.docId is a direct FK column — no json extraction needed.
-  // auditLog.actorId = clientMember UUID for doc_viewed events.
-  // Note: no doc_viewed events exist in Phase F1 (Task 47 writes them). Empty state expected.
+  // Recent views (top 5). Filter to phase='open' so each visit shows as one
+  // row — ViewBeacon writes a second phase='close' audit row when the tab
+  // unmounts (carrying duration_ms), which is useful for analytics but not
+  // for the human-scanning "who viewed what" list.
   const recentViews = await adminDb
     .select({
       memberEmail: schema.clientMembers.email,
+      docId: schema.docs.id,
       docTitle: schema.docs.title,
       viewedAt: schema.auditLog.createdAt,
     })
     .from(schema.auditLog)
     .innerJoin(schema.clientMembers, eq(schema.auditLog.actorId, schema.clientMembers.id))
     .innerJoin(schema.docs, eq(schema.auditLog.docId, schema.docs.id))
-    .where(eq(schema.auditLog.eventType, "doc_viewed"))
+    .where(
+      sql`${schema.auditLog.eventType} = 'doc_viewed'
+          AND ${schema.auditLog.metadata}->>'phase' = 'open'`,
+    )
     .orderBy(desc(schema.auditLog.createdAt))
     .limit(5);
 
@@ -236,6 +256,7 @@ export default async function AdminDashboard() {
               recentShares.map((row, i) => (
                 <ShareRow
                   key={i}
+                  docId={row.docId}
                   docTitle={row.docTitle}
                   clientName={row.clientName}
                   clientSlug={row.clientSlug}
@@ -264,6 +285,7 @@ export default async function AdminDashboard() {
                 <ViewRow
                   key={i}
                   memberEmail={row.memberEmail}
+                  docId={row.docId}
                   docTitle={row.docTitle}
                   viewedAt={row.viewedAt}
                   nowMs={nowMs}
