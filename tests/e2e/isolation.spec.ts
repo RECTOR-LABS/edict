@@ -17,12 +17,12 @@ test("A sees doc-1, not doc-2", async ({ page, request, seed }) => {
   // page, which is truthy, so the `|| fallback` pattern never fires and the
   // cookie is registered against the wrong origin. Always use the literal
   // base URL so the browser sends the cookie on subsequent requests to
-  // http://127.0.0.1:3000.
+  // http://localhost:3000.
   await page.context().addCookies([
     {
       name: "edict_session",
       value: cookieA,
-      url: "http://127.0.0.1:3000",
+      url: "http://localhost:3000",
     },
   ]);
 
@@ -48,7 +48,7 @@ test("A cannot reach /c/B/d/docB by URL manipulation", async ({ page, request, s
     {
       name: "edict_session",
       value: cookieA,
-      url: "http://127.0.0.1:3000",
+      url: "http://localhost:3000",
     },
   ]);
   const res = await page.goto(`/c/${seed.clientB.slug}/d/${seed.docB1.slug}`);
@@ -66,7 +66,7 @@ test("A's cookie on /c/B is rejected as mismatch", async ({ page, request, seed 
     {
       name: "edict_session",
       value: cookieA,
-      url: "http://127.0.0.1:3000",
+      url: "http://localhost:3000",
     },
   ]);
   const res = await page.goto(`/c/${seed.clientB.slug}`);
@@ -128,7 +128,7 @@ test("revoked session bounces to /", async ({ page, request, seed }) => {
     {
       name: "edict_session",
       value: cookieA,
-      url: "http://127.0.0.1:3000",
+      url: "http://localhost:3000",
     },
   ]);
 
@@ -154,15 +154,7 @@ test("two-step verify: GET landing does not consume token; POST consumes + redir
   });
 
   // Simulate the scanner (or the user's first navigation) — GET the verify URL.
-  // Use the absolute localhost origin so the form POST and the server's 302
-  // redirect Location header all resolve to the same hostname. Next.js
-  // production mode generates absolute redirects from req.nextUrl.origin which
-  // resolves to http://localhost:3000, not http://127.0.0.1:3000. If the
-  // page.goto uses 127.0.0.1 but the 302 Location points to localhost, the
-  // browser context switches hostnames and the edict_session cookie (set for
-  // 127.0.0.1) would not be sent to localhost — breaking the auth check.
-  const baseUrl = process.env.E2E_BASE_URL ?? "http://localhost:3000";
-  await page.goto(`${baseUrl}/auth/verify?token=${encodeURIComponent(raw)}`);
+  await page.goto(`/auth/verify?token=${encodeURIComponent(raw)}`);
   await expect(page.getByRole("button", { name: /Continue signing in/i })).toBeVisible();
 
   // Confirm in DB that the token is still live. This is the scanner-safe
