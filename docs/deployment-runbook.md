@@ -253,6 +253,25 @@ docker compose -f docker-compose.prod.yml exec -T db psql -U edict_admin -d edic
 
 ---
 
+## Two-step magic-link verify
+
+Magic-link sign-ins use a two-step flow to defeat email-scanner pre-fetching.
+
+**Flow:**
+1. User clicks link in email → lands at `GET /auth/verify?token=X`
+2. Page renders a "Continue signing in" form. **No DB work happens here.**
+3. User clicks the Continue button → browser POSTs the token to the same route
+4. `POST /auth/verify` consumes the token (atomic UPDATE with `consumed_at IS NULL` guard), sets the 30-day session cookie, and redirects to `/admin` (admins) or `/c/<slug>` (client members)
+
+**Why:** Proton, Outlook ATP, Google Safe Browsing, and corporate email gateways pre-fetch links via GET to scan for malware. Without the two-step split, that pre-fetch burns the single-use token before the human sees it. The split makes GET scanner-safe (zero DB touch) while POST stays as the real consumption boundary.
+
+**Operational notes:**
+- Token TTL is 24h (`lib/auth/issue.ts`). Unchanged.
+- Audit events (`magic_link_failed`, `session_created`) now fire only on POST, so scanner pre-fetches no longer add noise to the audit log.
+- If debugging a "This link is no longer valid" report, check `magic_link_tokens` for a `consumed_at` that predates the user's click — if it does, the token was legitimately already used (not a scanner burn, since GET is inert).
+
+---
+
 ## Known gotchas
 
 1. **DATABASE_URL must use `@db:5432`, not `@127.0.0.1:5432`** — the app container reaches postgres over the compose network, not the host loopback. Wrong URL manifests as `ECONNREFUSED` on first `pnpm db:migrate`.
