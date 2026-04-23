@@ -7,7 +7,7 @@ import { ArrowLeft, Users, UserPlus, Trash2 } from "lucide-react";
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
-import { getClientById } from "@/lib/db/queries/clients";
+import { getClientBySlug } from "@/lib/db/queries/clients";
 import { listMembersForClient } from "@/lib/db/queries/members";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
 import { addMemberAction, revokeMemberAction } from "@/actions/members";
@@ -17,14 +17,14 @@ import { addMemberAction, revokeMemberAction } from "@/actions/members";
 export default async function AdminClientDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   return requireAdminSession(async () => {
   const ctx = getContext();
   if (ctx.kind !== "admin") {
-    throw new Error("unexpected: non-admin context in /admin/clients/[id]");
+    throw new Error("unexpected: non-admin context in /admin/clients/[slug]");
   }
 
   // Resolve admin email for nav.
@@ -36,7 +36,7 @@ export default async function AdminClientDetailPage({
 
   const adminEmail = adminRow?.email ?? ctx.adminId;
 
-  const client = await getClientById(id);
+  const client = await getClientBySlug(slug);
   if (!client) notFound();
 
   const members = await listMembersForClient(client.id);

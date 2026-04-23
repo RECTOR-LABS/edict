@@ -141,7 +141,7 @@ export default async function AdminClientsPage() {
                     {/* Actions — Open link */}
                     <td className="px-6 py-5 text-right">
                       <Link
-                        href={`/admin/clients/${c.id}` as Route}
+                        href={`/admin/clients/${c.slug}` as Route}
                         className="group/open inline-flex items-center gap-1.5 font-mono text-xs text-[#8a8a93] transition-colors duration-150 hover:text-[#00e5ff]"
                       >
                         Open
