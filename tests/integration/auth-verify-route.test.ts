@@ -430,4 +430,67 @@ describe("/auth/verify route", () => {
     expect(audits).toHaveLength(1);
     expect(audits[0]!.eventType).toBe("magic_link_sent");
   });
+
+  // ── Test 11: GET with invalid token → landing page, NO audit (GET is DB-free)
+  it("GET with unknown/invalid token → 200 landing HTML, NO audit row written (GET performs zero DB work)", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb } = dbModule!;
+
+    const res = await GET(makeRequest("totally-invalid-token-string"));
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // GET is dumb — it renders the continue page regardless of token validity.
+    // POST is where validation happens. This is the scanner-safe invariant.
+    expect(body).toMatch(/<form[^>]+method=["']post["'][^>]*>/i);
+    expect(body).toContain('value="totally-invalid-token-string"');
+
+    // Critical: zero DB touch → zero audit rows.
+    const audits = await adminDb.query.auditLog.findMany({});
+    expect(audits).toHaveLength(0);
+  });
+
+  // ── Test 12: GET with consumed token → landing page still renders ─────────
+  it("GET with already-consumed token → 200 landing HTML, does not re-consume or error", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb, schema } = dbModule!;
+    const { sha256Hex } = await import("@/lib/utils/hash");
+
+    const [admin] = await adminDb
+      .insert(schema.admins)
+      .values({ email: "double-scan@edict.test", name: "Double Scan" })
+      .returning();
+
+    const rawToken = "already-consumed-raw-token";
+    await adminDb.insert(schema.magicLinkTokens).values({
+      tokenHash: sha256Hex(rawToken),
+      subjectType: "admin",
+      subjectId: admin!.id,
+      email: "double-scan@edict.test",
+      clientId: null,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      consumedAt: new Date(Date.now() - 1000),
+    });
+
+    const res = await GET(makeRequest(rawToken));
+
+    // GET renders the same landing page regardless of token state — zero DB
+    // read or write. The user will see "This link is no longer valid" only
+    // after clicking Continue (POST handles validation).
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toMatch(/<form[^>]+method=["']post["'][^>]*>/i);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  // ── Test 13: POST with missing token → invalid page ───────────────────────
+  it("POST without token → 200 invalid HTML, no cookie", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
+    const res = await POST(makePostRequest(null));
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("This link is no longer valid");
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
 });
