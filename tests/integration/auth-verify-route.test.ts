@@ -493,4 +493,40 @@ describe("/auth/verify route", () => {
     expect(body).toContain("This link is no longer valid");
     expect(res.headers.get("set-cookie")).toBeNull();
   });
+
+  // ── Test 14: Redirect origin uses APP_URL when set ────────────────────────
+  // Behind a reverse proxy (nginx → next start), req.nextUrl.origin resolves
+  // to the app's internal listening socket (http://localhost:3000), not the
+  // public hostname the user sees. The redirect must use APP_URL so the
+  // browser lands on the real public URL.
+  it("POST with valid admin token uses APP_URL as redirect origin when set", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb, schema } = dbModule!;
+    const { issueMagicLink } = await import("@/lib/auth/issue");
+
+    const [admin] = await adminDb
+      .insert(schema.admins)
+      .values({ email: "origintest@edict.test", name: "Origin Test Admin" })
+      .returning();
+
+    const { raw } = await issueMagicLink({
+      subjectType: "admin",
+      subjectId: admin!.id,
+      email: "origintest@edict.test",
+      clientId: null,
+    });
+
+    const prevAppUrl = process.env.APP_URL;
+    process.env.APP_URL = "https://edict.example.test";
+    try {
+      const res = await POST(makePostRequest(raw));
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toBe("https://edict.example.test/admin");
+    } finally {
+      if (prevAppUrl === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = prevAppUrl;
+    }
+  });
 });
