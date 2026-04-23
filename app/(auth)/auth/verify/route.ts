@@ -51,7 +51,13 @@ export async function POST(req: NextRequest) {
     redirectTo = `/c/${client.slug}`;
   }
 
-  const res = NextResponse.redirect(new URL(redirectTo, req.nextUrl.origin), 302);
+  // Use APP_URL for the redirect origin. req.nextUrl.origin resolves to the
+  // app's internal listening socket (e.g. http://localhost:3000) behind a
+  // reverse proxy — not the public hostname the user sees. APP_URL is already
+  // used by actions/sessions.ts to build the magic-link URL itself; using it
+  // here keeps the round-trip origin consistent.
+  const baseUrl = process.env.APP_URL ?? req.nextUrl.origin;
+  const res = NextResponse.redirect(new URL(redirectTo, baseUrl), 302);
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: result.sessionToken,
