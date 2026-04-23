@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { ShieldCheck } from "lucide-react";
 
 type AdminNavProps = {
@@ -16,7 +18,10 @@ type AdminNavProps = {
 export function AdminNav({ adminEmail }: AdminNavProps) {
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[rgba(255,255,255,0.08)] bg-[#06060c]/90 px-6 backdrop-blur-md">
-      <div className="flex items-center gap-2.5">
+      <Link
+        href={"/admin" as Route}
+        className="group flex items-center gap-2.5 outline-none focus-visible:ring-2 focus-visible:ring-[#00e5ff]/50 rounded-sm"
+      >
         {/* Pulsing status dot — live-ops console indicator */}
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00e5ff] opacity-75" />
@@ -25,12 +30,12 @@ export function AdminNav({ adminEmail }: AdminNavProps) {
             style={{ boxShadow: "0 0 6px #00e5ff" }}
           />
         </span>
-        <span className="font-mono text-sm font-bold tracking-[0.2em] text-white">
+        <span className="font-mono text-sm font-bold tracking-[0.2em] text-white transition-colors duration-150 group-hover:text-[#00e5ff]">
           EDICT{" "}
           <span className="text-[#00e5ff]/50">/</span>{" "}
           ADMIN
         </span>
-      </div>
+      </Link>
 
       <div className="flex items-center gap-4">
         <span className="flex items-center gap-1.5 font-mono text-xs text-[#8a8a93]">
