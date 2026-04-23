@@ -61,7 +61,18 @@ function makeRequest(token: string | null, headers: Record<string, string> = {})
   return new NextRequest(url, { headers });
 }
 
-describe("GET /auth/verify route", () => {
+function makePostRequest(token: string | null, headers: Record<string, string> = {}): NextRequest {
+  const url = new URL("http://localhost:3000/auth/verify");
+  const body = new URLSearchParams();
+  if (token !== null) body.set("token", token);
+  return new NextRequest(url, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
+    body: body.toString(),
+  });
+}
+
+describe("/auth/verify route", () => {
   // ── Test 1: Missing token ──────────────────────────────────────────────────
   it("missing token → 200 invalid HTML, no cookie", async () => {
     const { GET } = await import("@/app/(auth)/auth/verify/route");
@@ -74,38 +85,35 @@ describe("GET /auth/verify route", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  // ── Test 2: Invalid/unknown token ─────────────────────────────────────────
-  it("invalid token → 200 invalid HTML, no cookie, magic_link_failed audit written", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 2: Invalid/unknown token via POST ────────────────────────────────
+  it("POST with invalid token → 200 invalid HTML, no cookie, magic_link_failed audit written", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb } = dbModule!;
 
-    const res = await GET(makeRequest("totally-invalid-token-string"));
+    const res = await POST(makePostRequest("totally-invalid-token-string"));
 
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("This link is no longer valid");
     expect(res.headers.get("set-cookie")).toBeNull();
 
-    // verifyMagicLink writes magic_link_failed for any miss/expired path.
     const audits = await adminDb.query.auditLog.findMany({
       where: (a, { eq }) => eq(a.eventType, "magic_link_failed"),
     });
     expect(audits).toHaveLength(1);
   });
 
-  // ── Test 3: Expired token ─────────────────────────────────────────────────
-  it("expired token → 200 invalid HTML, no cookie, no session inserted", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 3: Expired token via POST ────────────────────────────────────────
+  it("POST with expired token → 200 invalid HTML, no cookie, no session inserted", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { sha256Hex } = await import("@/lib/utils/hash");
 
-    // Seed admin so we have a valid subjectId.
     const [admin] = await adminDb
       .insert(schema.admins)
       .values({ email: "expired@edict.test", name: "Expired Admin" })
       .returning();
 
-    // Directly insert a token with expires_at in the past.
     const rawToken = "expired-raw-token-for-test-01";
     await adminDb.insert(schema.magicLinkTokens).values({
       tokenHash: sha256Hex(rawToken),
@@ -113,10 +121,10 @@ describe("GET /auth/verify route", () => {
       subjectId: admin!.id,
       email: "expired@edict.test",
       clientId: null,
-      expiresAt: new Date(Date.now() - 1000), // 1 second in the past
+      expiresAt: new Date(Date.now() - 1000),
     });
 
-    const res = await GET(makeRequest(rawToken));
+    const res = await POST(makePostRequest(rawToken));
 
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -127,9 +135,9 @@ describe("GET /auth/verify route", () => {
     expect(sessions).toHaveLength(0);
   });
 
-  // ── Test 4: Already-consumed token ────────────────────────────────────────
-  it("already-consumed token → 200 invalid HTML, no cookie, no session inserted", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 4: Already-consumed token via POST ───────────────────────────────
+  it("POST with already-consumed token → 200 invalid HTML, no cookie, no session inserted", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { sha256Hex } = await import("@/lib/utils/hash");
 
@@ -138,7 +146,6 @@ describe("GET /auth/verify route", () => {
       .values({ email: "consumed@edict.test", name: "Consumed Admin" })
       .returning();
 
-    // Directly insert a token that is already consumed.
     const rawToken = "consumed-raw-token-for-test-02";
     await adminDb.insert(schema.magicLinkTokens).values({
       tokenHash: sha256Hex(rawToken),
@@ -146,11 +153,11 @@ describe("GET /auth/verify route", () => {
       subjectId: admin!.id,
       email: "consumed@edict.test",
       clientId: null,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // valid TTL
-      consumedAt: new Date(Date.now() - 5000), // already consumed 5s ago
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      consumedAt: new Date(Date.now() - 5000),
     });
 
-    const res = await GET(makeRequest(rawToken));
+    const res = await POST(makePostRequest(rawToken));
 
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -161,9 +168,9 @@ describe("GET /auth/verify route", () => {
     expect(sessions).toHaveLength(0);
   });
 
-  // ── Test 5: Valid admin token ──────────────────────────────────────────────
-  it("valid admin token → 302 to /admin, session cookie set, session row inserted, token consumed", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 5: Valid admin token via POST ────────────────────────────────────
+  it("POST with valid admin token → 302 to /admin, session cookie set, session row inserted, token consumed", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { sha256Hex } = await import("@/lib/utils/hash");
     const { issueMagicLink } = await import("@/lib/auth/issue");
@@ -180,15 +187,13 @@ describe("GET /auth/verify route", () => {
       clientId: null,
     });
 
-    const res = await GET(makeRequest(raw));
+    const res = await POST(makePostRequest(raw));
 
-    // Redirect assertions.
     expect(res.status).toBe(302);
     const location = res.headers.get("location");
     expect(location).not.toBeNull();
     expect(location).toMatch(/\/admin$/);
 
-    // Cookie assertions.
     const cookie = res.headers.get("set-cookie")!;
     expect(cookie).not.toBeNull();
     expect(cookie).toMatch(/edict_session=/);
@@ -196,10 +201,8 @@ describe("GET /auth/verify route", () => {
     expect(cookie).toMatch(/SameSite=lax/i);
     expect(cookie).toMatch(/Path=\//);
     expect(cookie).toMatch(/Max-Age=2592000/);
-    // NODE_ENV !== "production" in tests — Secure flag must NOT be present.
     expect(cookie).not.toMatch(/;\s*Secure/i);
 
-    // Session row inserted.
     const sessions = await adminDb.query.sessions.findMany({});
     expect(sessions).toHaveLength(1);
     const session = sessions[0]!;
@@ -207,19 +210,17 @@ describe("GET /auth/verify route", () => {
     expect(session.subjectId).toBe(admin!.id);
     expect(session.clientId).toBeNull();
 
-    // Verify session token hash matches.
     const sessionTokenInCookie = cookie.split("edict_session=")[1]!.split(";")[0]!;
     expect(session.sessionTokenHash).toBe(sha256Hex(sessionTokenInCookie));
 
-    // Magic link token consumed.
     const tokens = await adminDb.query.magicLinkTokens.findMany({});
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.consumedAt).not.toBeNull();
   });
 
-  // ── Test 6: Valid client_member token ─────────────────────────────────────
-  it("valid client_member token → 302 to /c/<slug>, session cookie set, session row inserted", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 6: Valid client_member token via POST ────────────────────────────
+  it("POST with valid client_member token → 302 to /c/<slug>, session cookie set, session row inserted", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { sha256Hex } = await import("@/lib/utils/hash");
     const { issueMagicLink } = await import("@/lib/auth/issue");
@@ -241,22 +242,19 @@ describe("GET /auth/verify route", () => {
       clientId: client!.id,
     });
 
-    const res = await GET(makeRequest(raw));
+    const res = await POST(makePostRequest(raw));
 
-    // Redirect assertions.
     expect(res.status).toBe(302);
     const location = res.headers.get("location");
     expect(location).not.toBeNull();
     expect(location).toMatch(/\/c\/acme-corp$/);
 
-    // Cookie set.
     const cookie = res.headers.get("set-cookie")!;
     expect(cookie).not.toBeNull();
     expect(cookie).toMatch(/edict_session=/);
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=lax/i);
 
-    // Session row inserted with correct tenant scope.
     const sessions = await adminDb.query.sessions.findMany({});
     expect(sessions).toHaveLength(1);
     const session = sessions[0]!;
@@ -264,14 +262,13 @@ describe("GET /auth/verify route", () => {
     expect(session.subjectId).toBe(member!.id);
     expect(session.clientId).toBe(client!.id);
 
-    // Verify session token hash matches cookie value.
     const sessionTokenInCookie = cookie.split("edict_session=")[1]!.split(";")[0]!;
     expect(session.sessionTokenHash).toBe(sha256Hex(sessionTokenInCookie));
   });
 
-  // ── Test 7: Client deleted mid-flow → verifyMagicLink FK-throws, caught by try/catch wrap
-  it("client deleted after token issued → verifyMagicLink FK-throws, caught by try/catch, renderInvalid", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 7: Client deleted mid-flow via POST → FK-throws, caught by try/catch
+  it("POST: client deleted after token issued → verifyMagicLink FK-throws, caught by try/catch, renderInvalid", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { issueMagicLink } = await import("@/lib/auth/issue");
 
@@ -292,19 +289,6 @@ describe("GET /auth/verify route", () => {
       clientId: client!.id,
     });
 
-    // Delete the client row via an FK bypass. Production invariant: clients are
-    // only deleted through paths that respect FK constraints (none exist in
-    // Phase 1). This test simulates the edge case anyway to verify the route's
-    // try/catch wrap (added at 2dade5a) handles the thrown FK violation from
-    // verifyMagicLink.insertSession without crashing the handler.
-    //
-    // The route's own `if (!client) return renderInvalid()` branch is NEVER
-    // reached here — insertSession throws before returning to the route. That
-    // branch is defensive; see the comment in route.ts above it.
-    //
-    // Pin the session_replication_role toggle to a single pool connection so
-    // the replica→origin reset is colocated with the DELETE and can't leak
-    // replica mode to another pool connection.
     const conn = await superPool!.connect();
     try {
       await conn.query("SET session_replication_role = 'replica'");
@@ -314,22 +298,20 @@ describe("GET /auth/verify route", () => {
       conn.release();
     }
 
-    const res = await GET(makeRequest(raw));
+    const res = await POST(makePostRequest(raw));
 
-    // verifyMagicLink threw during insertSession → try/catch caught it → renderInvalid returned.
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("This link is no longer valid");
     expect(res.headers.get("set-cookie")).toBeNull();
 
-    // No session was created.
     const sessions = await adminDb.query.sessions.findMany({});
     expect(sessions).toHaveLength(0);
   });
 
-  // ── Test 8: IP + User-Agent capture ───────────────────────────────────────
-  it("valid admin token with X-Forwarded-For + User-Agent → session row captures first IP + UA", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 8: IP + User-Agent capture via POST ──────────────────────────────
+  it("POST with X-Forwarded-For + User-Agent → session row captures first IP + UA", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { issueMagicLink } = await import("@/lib/auth/issue");
 
@@ -345,8 +327,8 @@ describe("GET /auth/verify route", () => {
       clientId: null,
     });
 
-    const res = await GET(
-      makeRequest(raw, {
+    const res = await POST(
+      makePostRequest(raw, {
         "x-forwarded-for": "1.2.3.4, 5.6.7.8",
         "user-agent": "test-agent/1.0",
       }),
@@ -361,9 +343,9 @@ describe("GET /auth/verify route", () => {
     expect(session.userAgent).toBe("test-agent/1.0");
   });
 
-  // ── Test 9: Revoked member token ──────────────────────────────────────────
-  it("revoked member token → 200 invalid HTML, no cookie, no session inserted, magic_link_failed audit written", async () => {
-    const { GET } = await import("@/app/(auth)/auth/verify/route");
+  // ── Test 9: Revoked member token via POST ─────────────────────────────────
+  it("POST with revoked member token → 200 invalid HTML, no cookie, no session, magic_link_failed audit written", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
     const { adminDb, schema } = dbModule!;
     const { issueMagicLink } = await import("@/lib/auth/issue");
     const { eq } = await import("drizzle-orm");
@@ -385,29 +367,130 @@ describe("GET /auth/verify route", () => {
       clientId: client!.id,
     });
 
-    // Revoke the member after the token is issued — simulates the race window
-    // where a magic-link is in-flight when revocation happens.
     await adminDb
       .update(schema.clientMembers)
       .set({ revokedAt: new Date() })
       .where(eq(schema.clientMembers.id, member!.id));
 
-    const res = await GET(makeRequest(raw));
+    const res = await POST(makePostRequest(raw));
 
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("This link is no longer valid");
     expect(res.headers.get("set-cookie")).toBeNull();
 
-    // No session was created.
     const sessions = await adminDb.query.sessions.findMany({});
     expect(sessions).toHaveLength(0);
 
-    // magic_link_failed audit written with member_revoked reason.
     const audits = await adminDb.query.auditLog.findMany({
       where: (a, { eq: eqFn }) => eqFn(a.eventType, "magic_link_failed"),
     });
     expect(audits).toHaveLength(1);
     expect((audits[0]!.metadata as Record<string, unknown>)["reason"]).toBe("member_revoked");
+  });
+
+  // ── Test 10: GET renders landing page without consuming token (SCANNER-SAFE) ─
+  it("GET with valid token → 200 continue-landing HTML, token NOT consumed in DB, no cookie, no session inserted", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb, schema } = dbModule!;
+    const { issueMagicLink } = await import("@/lib/auth/issue");
+
+    const [admin] = await adminDb
+      .insert(schema.admins)
+      .values({ email: "scanner@edict.test", name: "Scanner Admin" })
+      .returning();
+
+    const { raw } = await issueMagicLink({
+      subjectType: "admin",
+      subjectId: admin!.id,
+      email: "scanner@edict.test",
+      clientId: null,
+    });
+
+    const res = await GET(makeRequest(raw));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    const body = await res.text();
+    expect(body).toMatch(/<form[^>]+method=["']post["'][^>]*>/i);
+    expect(body).toContain(`value="${raw}"`);
+    expect(body).toMatch(/continue|sign in/i);
+
+    expect(res.headers.get("set-cookie")).toBeNull();
+
+    const tokens = await adminDb.query.magicLinkTokens.findMany({});
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]!.consumedAt).toBeNull();
+
+    const sessions = await adminDb.query.sessions.findMany({});
+    expect(sessions).toHaveLength(0);
+
+    const audits = await adminDb.query.auditLog.findMany({});
+    // issueMagicLink wrote one magic_link_sent row; GET must add none.
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.eventType).toBe("magic_link_sent");
+  });
+
+  // ── Test 11: GET with invalid token → landing page, NO audit (GET is DB-free)
+  it("GET with unknown/invalid token → 200 landing HTML, NO audit row written (GET performs zero DB work)", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb } = dbModule!;
+
+    const res = await GET(makeRequest("totally-invalid-token-string"));
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // GET is dumb — it renders the continue page regardless of token validity.
+    // POST is where validation happens. This is the scanner-safe invariant.
+    expect(body).toMatch(/<form[^>]+method=["']post["'][^>]*>/i);
+    expect(body).toContain('value="totally-invalid-token-string"');
+
+    // Critical: zero DB touch → zero audit rows.
+    const audits = await adminDb.query.auditLog.findMany({});
+    expect(audits).toHaveLength(0);
+  });
+
+  // ── Test 12: GET with consumed token → landing page still renders ─────────
+  it("GET with already-consumed token → 200 landing HTML, does not re-consume or error", async () => {
+    const { GET } = await import("@/app/(auth)/auth/verify/route");
+    const { adminDb, schema } = dbModule!;
+    const { sha256Hex } = await import("@/lib/utils/hash");
+
+    const [admin] = await adminDb
+      .insert(schema.admins)
+      .values({ email: "double-scan@edict.test", name: "Double Scan" })
+      .returning();
+
+    const rawToken = "already-consumed-raw-token";
+    await adminDb.insert(schema.magicLinkTokens).values({
+      tokenHash: sha256Hex(rawToken),
+      subjectType: "admin",
+      subjectId: admin!.id,
+      email: "double-scan@edict.test",
+      clientId: null,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      consumedAt: new Date(Date.now() - 1000),
+    });
+
+    const res = await GET(makeRequest(rawToken));
+
+    // GET renders the same landing page regardless of token state — zero DB
+    // read or write. The user will see "This link is no longer valid" only
+    // after clicking Continue (POST handles validation).
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toMatch(/<form[^>]+method=["']post["'][^>]*>/i);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  // ── Test 13: POST with missing token → invalid page ───────────────────────
+  it("POST without token → 200 invalid HTML, no cookie", async () => {
+    const { POST } = await import("@/app/(auth)/auth/verify/route");
+    const res = await POST(makePostRequest(null));
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("This link is no longer valid");
+    expect(res.headers.get("set-cookie")).toBeNull();
   });
 });

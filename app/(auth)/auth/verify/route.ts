@@ -6,8 +6,21 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/middleware";
 
 const COOKIE_MAX_AGE_S = 30 * 24 * 60 * 60;
 
+/**
+ * Two-step verify to defeat email-scanner token pre-fetching (Proton, Outlook
+ * ATP, Safe Browsing, corporate gateways). GET renders a landing page with a
+ * POST form; the token is only consumed when a human submits the form. GET
+ * performs zero DB work, so scanner pre-fetches cannot burn tokens.
+ */
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
+  if (!token) return renderInvalid();
+  return renderContinue(token);
+}
+
+export async function POST(req: NextRequest) {
+  const form = await req.formData().catch(() => null);
+  const token = form ? String(form.get("token") ?? "") : "";
   if (!token) return renderInvalid();
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
@@ -49,6 +62,34 @@ export async function GET(req: NextRequest) {
     maxAge: COOKIE_MAX_AGE_S,
   });
   return res;
+}
+
+function renderContinue(token: string) {
+  // Escape token for safe HTML attribute embedding. Tokens from generateToken()
+  // are base64url-safe so this is defensive — a malformed ?token= from a
+  // scanner probe must not break out of the attribute.
+  const safeToken = token.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
+  return new NextResponse(
+    `<!DOCTYPE html>
+     <html lang="en">
+       <body style="background:#06060c;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0">
+         <main style="max-width:480px;padding:24px;text-align:center">
+           <h1 style="font-size:22px;margin-bottom:12px;color:#fff">Sign in to Edict</h1>
+           <p style="color:#9ca3af;margin-bottom:28px">Confirm you opened this link to continue.</p>
+           <form method="post" action="/auth/verify">
+             <input type="hidden" name="token" value="${safeToken}" />
+             <button type="submit" style="background:#fff;color:#000;border:0;padding:14px 28px;border-radius:3px;font-weight:600;cursor:pointer;font-size:14px">
+               Continue signing in →
+             </button>
+           </form>
+           <p style="color:#64748b;font-size:12px;margin-top:32px">This one-time link expires 24 hours after it was sent.</p>
+         </main>
+       </body>
+     </html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+  );
 }
 
 function renderInvalid() {
