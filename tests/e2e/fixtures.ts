@@ -56,6 +56,36 @@ export async function signIn(
   return match[1]!;
 }
 
+/**
+ * Admin equivalent of signIn — issues a magic-link for subjectType "admin"
+ * and consumes it via POST /auth/verify to retrieve the session cookie.
+ */
+export async function adminSignIn(
+  request: APIRequestContext,
+  adminEmail: string,
+  adminId: string,
+): Promise<string> {
+  const { raw } = await issueMagicLink({
+    subjectType: "admin",
+    subjectId: adminId,
+    email: adminEmail,
+    clientId: null,
+  });
+  const res = await request.post(`/auth/verify`, {
+    form: { token: raw },
+    maxRedirects: 0,
+    failOnStatusCode: false,
+  });
+  const setCookie = res.headers()["set-cookie"] ?? "";
+  const match = /edict_session=([^;]+)/.exec(setCookie);
+  if (!match) {
+    throw new Error(
+      `adminSignIn: no edict_session cookie in Set-Cookie header (status ${res.status()}).`,
+    );
+  }
+  return match[1]!;
+}
+
 export const test = base.extend<{ seed: Seed }>({
   seed: async ({}, use) => {
     // Wipe then seed — tests assume fully fresh state on every run.

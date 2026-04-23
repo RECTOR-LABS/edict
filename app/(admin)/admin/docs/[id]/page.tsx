@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, Share2, Check } from "lucide-react";
+import { ArrowLeft, Share2, Check, Eye } from "lucide-react";
 
 import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
@@ -71,14 +71,26 @@ export default async function AdminDocEditPage({
             </h1>
           </div>
 
-          {/* Share link (Task 41 route) */}
-          <Link
-            href={`/admin/docs/${doc.id}/share` as Route}
-            className="group mt-1 inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-[#00e5ff] transition-opacity duration-150 hover:opacity-75"
-          >
-            <Share2 size={13} strokeWidth={1.75} />
-            Share
-          </Link>
+          <div className="mt-1 flex shrink-0 items-center gap-4">
+            <Link
+              href={`/admin/docs/${doc.id}/preview` as Route}
+              target="_blank"
+              rel="noopener"
+              className="group inline-flex items-center gap-1.5 font-mono text-[11px] text-[#00e5ff] transition-opacity duration-150 hover:opacity-75"
+            >
+              <Eye size={13} strokeWidth={1.75} />
+              Preview
+            </Link>
+
+            {/* Share link (Task 41 route) */}
+            <Link
+              href={`/admin/docs/${doc.id}/share` as Route}
+              className="group inline-flex items-center gap-1.5 font-mono text-[11px] text-[#00e5ff] transition-opacity duration-150 hover:opacity-75"
+            >
+              <Share2 size={13} strokeWidth={1.75} />
+              Share
+            </Link>
+          </div>
         </div>
 
         {/* Form */}
