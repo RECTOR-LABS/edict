@@ -19,9 +19,11 @@ export type Seed = {
 /**
  * Exchange a fresh magic-link token for a session cookie value.
  *
- * The /auth/verify route sets the session cookie on a 302 redirect response.
- * We must stop at the redirect (maxRedirects: 0) to read the Set-Cookie header
- * before Playwright follows it — once followed the 302 is gone from the chain.
+ * Two-step verify: GET renders a landing page; POST consumes the token and
+ * returns the session cookie on a 302. The token we already have from
+ * issueMagicLink() is sufficient — we skip the GET render step and POST
+ * directly to consume, which is what a real browser would do after a human
+ * clicks the Continue button in the landing form.
  */
 export async function signIn(
   request: APIRequestContext,
@@ -35,9 +37,11 @@ export async function signIn(
     email: memberEmail,
     clientId,
   });
-  // maxRedirects: 0 prevents following the 302; failOnStatusCode: false allows
-  // non-2xx status without throwing so we can inspect the redirect response.
-  const res = await request.get(`/auth/verify?token=${raw}`, {
+  // maxRedirects: 0 prevents following the 302 so we can read Set-Cookie from
+  // the redirect response directly. failOnStatusCode: false allows non-2xx
+  // status without throwing.
+  const res = await request.post(`/auth/verify`, {
+    form: { token: raw },
     maxRedirects: 0,
     failOnStatusCode: false,
   });
@@ -46,7 +50,7 @@ export async function signIn(
   if (!match) {
     throw new Error(
       `signIn: no edict_session cookie in Set-Cookie header (status ${res.status()}). ` +
-        `Verify that /auth/verify is reachable and the token was not already consumed.`,
+        `Verify that POST /auth/verify is reachable and the token was not already consumed.`,
     );
   }
   return match[1]!;

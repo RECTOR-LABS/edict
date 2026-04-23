@@ -91,10 +91,12 @@ test("revoked member's new magic-link fails", async ({ request, seed }) => {
     clientId: seed.clientA.id,
   });
 
-  // Consume the token. failOnStatusCode: false allows non-2xx responses.
-  // verifyMagicLink checks member.revokedAt before creating a session, so it
-  // must return the "invalid link" HTML page (200) rather than a 302+cookie.
-  const res = await request.get(`/auth/verify?token=${raw}`, {
+  // POST the token — this is where the revocation guard inside verifyMagicLink
+  // fires. GET only renders the landing page, so it is not the right place to
+  // test the guard after the two-step split.
+  const res = await request.post(`/auth/verify`, {
+    form: { token: raw },
+    maxRedirects: 0,
     failOnStatusCode: false,
   });
 
@@ -103,7 +105,7 @@ test("revoked member's new magic-link fails", async ({ request, seed }) => {
   expect(setCookie).not.toMatch(/edict_session=/);
 
   // The response body must render the invalid-link page, not a redirect to /c/A.
-  // Status 200 (not 302) confirms the revocation gate fired.
+  // Status 200 (not 302) confirms the revocation gate fired inside POST.
   expect(res.status()).toBe(200);
 });
 
@@ -135,4 +137,49 @@ test("revoked session bounces to /", async ({ page, request, seed }) => {
   // After following the redirect chain, the final URL must be the root path.
   // A trailing slash on / is acceptable; /c/* would indicate a leak.
   expect(new URL(res!.url()).pathname).toBe("/");
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 6: Two-step verify flow — GET /auth/verify renders the landing page
+// without consuming the token; the human click on Continue submits the POST
+// form which consumes the token and issues the session cookie. This is the
+// scanner-safety invariant from the user-agent perspective.
+// ---------------------------------------------------------------------------
+test("two-step verify: GET landing does not consume token; POST consumes + redirects", async ({ page, seed }) => {
+  const { raw } = await issueMagicLink({
+    subjectType: "client_member",
+    subjectId: seed.memberA.id,
+    email: seed.memberA.email,
+    clientId: seed.clientA.id,
+  });
+
+  // Simulate the scanner (or the user's first navigation) — GET the verify URL.
+  // Use the absolute localhost origin so the form POST and the server's 302
+  // redirect Location header all resolve to the same hostname. Next.js
+  // production mode generates absolute redirects from req.nextUrl.origin which
+  // resolves to http://localhost:3000, not http://127.0.0.1:3000. If the
+  // page.goto uses 127.0.0.1 but the 302 Location points to localhost, the
+  // browser context switches hostnames and the edict_session cookie (set for
+  // 127.0.0.1) would not be sent to localhost — breaking the auth check.
+  const baseUrl = process.env.E2E_BASE_URL ?? "http://localhost:3000";
+  await page.goto(`${baseUrl}/auth/verify?token=${encodeURIComponent(raw)}`);
+  await expect(page.getByRole("button", { name: /Continue signing in/i })).toBeVisible();
+
+  // Confirm in DB that the token is still live. This is the scanner-safe
+  // invariant — GET must never consume the token.
+  const preClickTokens = await adminDb.query.magicLinkTokens.findMany({
+    where: (t, { eq }) => eq(t.tokenHash, sha256Hex(raw)),
+  });
+  expect(preClickTokens).toHaveLength(1);
+  expect(preClickTokens[0]!.consumedAt).toBeNull();
+
+  // Human click: submit the form. Token consumed, redirect to /c/<slug>.
+  await page.getByRole("button", { name: /Continue signing in/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/c/${seed.clientA.slug}$`));
+
+  // Token is now consumed — the UPDATE fired on POST.
+  const postClickTokens = await adminDb.query.magicLinkTokens.findMany({
+    where: (t, { eq }) => eq(t.tokenHash, sha256Hex(raw)),
+  });
+  expect(postClickTokens[0]!.consumedAt).not.toBeNull();
 });
