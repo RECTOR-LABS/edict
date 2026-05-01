@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-lane:
+    name: typecheck · lint · unit · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm exec vitest run tests/unit
+
+      - name: Build
+        # next build evaluates lib/db/index.ts during static analysis, which
+        # throws on missing DATABASE_URL / DATABASE_ADMIN_URL. Pass dummy URLs
+        # so the build doesn't crash on env validation. The build never
+        # actually connects.
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          DATABASE_ADMIN_URL: postgres://ci:ci@localhost:5432/ci
+        run: pnpm build
+
+  integration:
+    name: integration tests (testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Integration tests
+        # Each integration test file spins up its own postgres container via
+        # testcontainers. GitHub-hosted ubuntu-latest has Docker preinstalled.
+        run: pnpm exec vitest run tests/integration
