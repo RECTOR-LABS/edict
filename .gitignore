@@ -71,3 +71,5 @@ package-lock.json
 
 # Postgres backup dumps (bind-mounted in docker-compose.prod.yml)
 /backups/
+.vercel
+.env*
