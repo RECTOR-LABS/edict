@@ -1,6 +1,11 @@
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Pool, type PoolClient } from "pg";
+import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
+import { Pool, neonConfig, type PoolClient } from "@neondatabase/serverless";
+import ws from "ws";
 import * as schema from "@/lib/db/schema";
+
+// Node.js (Vercel Functions, local dev) needs an explicit WebSocket implementation.
+// The browser already has WebSocket; this is a no-op there but harmless to set.
+neonConfig.webSocketConstructor = ws;
 
 function required(name: string): string {
   const v = process.env[name];
@@ -21,12 +26,11 @@ const adminPool = new Pool({
   idleTimeoutMillis: 30_000,
 });
 
-// pg crashes the process on unhandled idle-client errors (e.g. ECONNRESET).
-// Log and let the pool discard the broken socket.
-appPool.on("error", (err) => {
+// Neon driver also surfaces socket errors; log and let the pool discard.
+appPool.on("error", (err: Error) => {
   console.error("edict appPool idle client error", err);
 });
-adminPool.on("error", (err) => {
+adminPool.on("error", (err: Error) => {
   console.error("edict adminPool idle client error", err);
 });
 
@@ -41,7 +45,7 @@ export const adminDb = drizzle(adminPool, { schema });
  */
 export async function withClientScope<T>(
   clientId: string,
-  fn: (tx: NodePgDatabase<typeof schema>) => Promise<T>,
+  fn: (tx: NeonDatabase<typeof schema>) => Promise<T>,
 ): Promise<T> {
   const client: PoolClient = await appPool.connect();
   try {

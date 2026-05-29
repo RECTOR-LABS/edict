@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { adminDb, schema } from "@/lib/db";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import type * as dbSchema from "@/lib/db/schema";
 
 type Subject = "client_member" | "admin";
@@ -66,7 +66,7 @@ export async function touchSession(sessionId: string) {
 export async function revokeSessionsForSubject(
   subjectType: "admin" | "client_member",
   subjectId: string,
-  tx?: NodePgDatabase<typeof dbSchema>,
+  tx?: NeonDatabase<typeof dbSchema>,
 ): Promise<{ revokedCount: number }> {
   const db = tx ?? adminDb;
   const result = await db
