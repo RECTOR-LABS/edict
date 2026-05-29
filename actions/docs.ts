@@ -4,8 +4,6 @@ import { createDoc, updateDoc } from "@/lib/db/queries/docs";
 import { writeAudit } from "@/lib/db/queries/audit";
 import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
-import { redirect } from "next/navigation";
-import type { Route } from "next";
 
 export async function createDocAction(formData: FormData) {
   return requireAdminSession(async () => {
@@ -29,7 +27,7 @@ export async function createDocAction(formData: FormData) {
     docId: d.id,
     metadata: { target_type: "doc", target_id: d.id, action: "create", title },
   });
-  redirect(`/admin/docs/${d.id}` as Route);
+  return d;
   });
 }
 
@@ -50,6 +48,6 @@ export async function updateDocAction(formData: FormData) {
     docId: d.id,
     metadata: { target_type: "doc", target_id: d.id, action: "update" },
   });
-  redirect(`/admin/docs/${d.id}` as Route);
+  return d;
   });
 }

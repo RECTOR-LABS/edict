@@ -10,7 +10,6 @@ import { requireAdminSession } from "@/lib/auth/middleware";
 import { getClientBySlug } from "@/lib/db/queries/clients";
 import { listMembersForClient } from "@/lib/db/queries/members";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
-import { addMemberAction, revokeMemberAction } from "@/actions/members";
 
 // ── Page (server component) ──────────────────────────────────────────────────
 
@@ -178,7 +177,7 @@ export default async function AdminClientDetailPage({
 
                       {/* Revoke */}
                       <td className="px-6 py-4 text-right">
-                        <form action={revokeMemberAction}>
+                        <form action={`/api/admin/clients/${slug}/members/revoke`} method="POST">
                           <input type="hidden" name="memberId" value={m.id} />
                           <input type="hidden" name="clientId" value={client.id} />
                           <button
@@ -216,7 +215,7 @@ export default async function AdminClientDetailPage({
           </div>
 
           <div className="rounded-sm border border-[rgba(255,255,255,0.08)] bg-[#0d0d14] p-6">
-            <form action={addMemberAction} className="flex flex-wrap items-end gap-4">
+            <form action={`/api/admin/clients/${slug}/members`} method="POST" className="flex flex-wrap items-end gap-4">
               <input type="hidden" name="clientId" value={client.id} />
 
               {/* Email (required) */}

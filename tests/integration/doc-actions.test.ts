@@ -4,8 +4,8 @@
  * Pattern matches create-client-action.test.ts (Task 37):
  * - Real DB via @testcontainers/postgresql
  * - runWithContext() for auth context — no vi.mock of lib/auth/context
- * - vi.mock("next/navigation") to turn redirect() into a trackable throw
- *   (no revalidatePath in these actions — both terminate with redirect())
+ * - both actions return the created/updated row (the calling Route Handler owns
+ *   the redirect), so these tests assert the returned row
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,17 +16,6 @@ import { Pool } from "pg";
 import type * as DbModule from "@/lib/db";
 import type { createDocAction, updateDocAction } from "@/actions/docs";
 import type { runWithContext } from "@/lib/auth/context";
-
-// ---------------------------------------------------------------------------
-// Mock next/navigation — redirect() throws NEXT_REDIRECT in a real Next.js
-// runtime; replicate that pattern here so the action's redirect() is
-// testable without a full runtime.
-// ---------------------------------------------------------------------------
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn((url: string) => {
-    throw new Error(`REDIRECT:${url}`);
-  }),
-}));
 
 // ---------------------------------------------------------------------------
 // Mock requireAdminSession — bypasses cookies()/Next.js request scope.
@@ -137,7 +126,7 @@ function clientCtx() {
 
 describe("createDocAction", () => {
   // Test 1: Admin + valid input → doc inserted, audit event written, redirect to /admin/docs/:id
-  it("inserts doc with all fields, writes admin_action audit event, and redirects to /admin/docs/:id", async () => {
+  it("inserts doc with all fields, writes admin_action audit event, and returns the created row", async () => {
     const fd = makeFormData({
       slug: "adrena-implementation-plan",
       title: "Adrena Trading Arena — Implementation Plan",
@@ -145,22 +134,16 @@ describe("createDocAction", () => {
       body: "<!DOCTYPE html><html><body>content</body></html>",
     });
 
-    let caughtErr: Error | undefined;
+    let created: Awaited<ReturnType<NonNullable<typeof createAction>>> | undefined;
     await ctxHelper!(adminCtx(), async () => {
-      try {
-        await createAction!(fd);
-        expect.fail("expected NEXT_REDIRECT throw");
-      } catch (err) {
-        caughtErr = err as Error;
-      }
+      created = await createAction!(fd);
     });
 
-    // Assert redirect threw with correct URL shape.
-    expect(caughtErr).toBeDefined();
-    expect(caughtErr!.message).toMatch(/^REDIRECT:\/admin\/docs\/[0-9a-f-]{36}$/);
+    // Assert the action returned the created row.
+    expect(created).toBeDefined();
+    expect(created!.id).toMatch(/^[0-9a-f-]{36}$/);
 
-    // Extract inserted doc id from redirect URL.
-    const docId = caughtErr!.message.replace("REDIRECT:/admin/docs/", "");
+    const docId = created!.id;
 
     const { adminDb, schema } = dbModule!;
 
@@ -269,7 +252,7 @@ describe("createDocAction", () => {
 
 describe("updateDocAction", () => {
   // Test 6: Admin + existing doc → doc updated, audit event written, redirect to /admin/docs/:id
-  it("updates doc fields, bumps updatedAt, writes admin_action audit event, and redirects to /admin/docs/:id", async () => {
+  it("updates doc fields, bumps updatedAt, writes admin_action audit event, and returns the updated row", async () => {
     const { adminDb, schema } = dbModule!;
 
     // Insert a doc directly to update.
@@ -284,10 +267,13 @@ describe("updateDocAction", () => {
       })
       .returning();
     const docId = inserted!.id;
-    const originalUpdatedAt = inserted!.updatedAt;
-
-    // Small delay to ensure updatedAt changes — use a minimal 2ms sleep.
-    await new Promise((r) => setTimeout(r, 2));
+    // Capture a host-clock baseline just before the update. updateDoc() sets
+    // updatedAt via new Date() (host clock), while the insert above used the DB
+    // default now(). Comparing those two clocks is fragile whenever the DB runs
+    // on a different host (a remote DB, or a colima/Lima VM whose clock drifts
+    // from the macOS host). Asserting against a host-clock baseline keeps the
+    // "updatedAt was bumped" check correct everywhere.
+    const beforeUpdate = Date.now();
 
     const fd = makeFormData({
       id: docId,
@@ -296,19 +282,15 @@ describe("updateDocAction", () => {
       bodyType: "markdown",
     });
 
-    let caughtErr: Error | undefined;
+    let updated: Awaited<ReturnType<NonNullable<typeof updateAction>>> | undefined;
     await ctxHelper!(adminCtx(), async () => {
-      try {
-        await updateAction!(fd);
-        expect.fail("expected NEXT_REDIRECT throw");
-      } catch (err) {
-        caughtErr = err as Error;
-      }
+      updated = await updateAction!(fd);
     });
 
-    // Assert redirect threw with the doc's id.
-    expect(caughtErr).toBeDefined();
-    expect(caughtErr!.message).toBe(`REDIRECT:/admin/docs/${docId}`);
+    // Assert the action returned the updated row.
+    expect(updated).toBeDefined();
+    expect(updated!.id).toBe(docId);
+    expect(updated!.title).toBe("Updated Title");
 
     // Assert doc was updated.
     const docRows = await adminDb.select().from(schema.docs);
@@ -317,7 +299,7 @@ describe("updateDocAction", () => {
     expect(doc.title).toBe("Updated Title");
     expect(doc.body).toBe("updated body");
     expect(doc.bodyType).toBe("markdown");
-    expect(doc.updatedAt.getTime()).toBeGreaterThanOrEqual(originalUpdatedAt.getTime());
+    expect(doc.updatedAt.getTime()).toBeGreaterThanOrEqual(beforeUpdate);
 
     // Assert audit event was written.
     const auditRows = await adminDb.select().from(schema.auditLog);

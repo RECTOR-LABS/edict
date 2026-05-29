@@ -9,7 +9,6 @@ import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
 import { getDocById } from "@/lib/db/queries/docs";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
-import { updateDocAction } from "@/actions/docs";
 import { Field, SelectField, TextareaField } from "../_components/doc-form-fields";
 
 // ── Page (server component) ──────────────────────────────────────────────────
@@ -95,7 +94,7 @@ export default async function AdminDocEditPage({
 
         {/* Form */}
         <div className="rounded-sm border border-[rgba(255,255,255,0.08)] bg-[#0d0d14] p-10">
-          <form action={updateDocAction} className="flex flex-col gap-6">
+          <form action={`/api/admin/docs/${doc.id}`} method="POST" className="flex flex-col gap-6">
             {/* Hidden doc ID — required by updateDocAction */}
             <input type="hidden" name="id" value={doc.id} />
 

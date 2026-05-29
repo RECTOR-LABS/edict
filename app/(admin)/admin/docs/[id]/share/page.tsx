@@ -11,7 +11,6 @@ import { getDocById } from "@/lib/db/queries/docs";
 import { listClients } from "@/lib/db/queries/clients";
 import { listSharesForDoc } from "@/lib/db/queries/shares";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
-import { shareDocAction, unshareAction } from "@/actions/share";
 
 // ── Page (server component) ──────────────────────────────────────────────────
 
@@ -130,7 +129,7 @@ export default async function AdminDocSharePage({
                       <div className="flex flex-wrap items-center gap-3">
                         {/* Unshare button — shown only when actively shared */}
                         {activeShare !== null && (
-                          <form action={unshareAction}>
+                          <form action={`/api/admin/docs/${doc.id}/share/revoke`} method="POST">
                             <input type="hidden" name="docId" value={doc.id} />
                             <input type="hidden" name="clientId" value={client.id} />
                             <button
@@ -144,7 +143,7 @@ export default async function AdminDocSharePage({
                         )}
 
                         {/* Share form — always visible (can add new recipients to active share too) */}
-                        <form action={shareDocAction} className="flex items-center gap-2">
+                        <form action={`/api/admin/docs/${doc.id}/share`} method="POST" className="flex items-center gap-2">
                           <input type="hidden" name="docId" value={doc.id} />
                           <input type="hidden" name="clientId" value={client.id} />
                           <input

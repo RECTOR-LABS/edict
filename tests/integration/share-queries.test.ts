@@ -139,8 +139,13 @@ describe("upsertShare()", () => {
     expect(row.docId).toBe(doc.id);
     expect(row.clientId).toBe(client.id);
     expect(row.revokedAt).toBeNull();
-    expect(row.sharedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(row.sharedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    // sharedAt is set by the DB default now(); before/after are host-clock.
+    // Allow a tolerance so DB/host clock skew (a remote DB, or a colima/Lima VM
+    // whose clock drifts from the macOS host) doesn't fail a correctly-populated
+    // timestamp while still catching null/epoch/far-future regressions.
+    const SKEW_MS = 5_000;
+    expect(row.sharedAt.getTime()).toBeGreaterThanOrEqual(before.getTime() - SKEW_MS);
+    expect(row.sharedAt.getTime()).toBeLessThanOrEqual(after.getTime() + SKEW_MS);
   });
 
   it("returns the existing row unchanged when share is already active (no duplicate insert)", async () => {

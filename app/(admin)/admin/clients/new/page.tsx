@@ -7,7 +7,6 @@ import { adminDb, schema } from "@/lib/db";
 import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
 import { AdminNav } from "@/app/(admin)/_components/admin-nav";
-import { createClientAction } from "@/actions/clients";
 
 // ── Field helper ─────────────────────────────────────────────────────────────
 
@@ -158,7 +157,7 @@ export default async function AdminClientsNewPage() {
 
         {/* Form */}
         <div className="rounded-sm border border-[rgba(255,255,255,0.08)] bg-[#0d0d14] p-10">
-          <form action={createClientAction} className="flex flex-col gap-6">
+          <form action="/api/admin/clients" method="POST" className="flex flex-col gap-6">
             {/* Slug */}
             <Field
               name="slug"
