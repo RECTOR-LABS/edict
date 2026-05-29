@@ -1,4 +1,3 @@
-import { requestMagicLinkAction } from "@/actions/sessions";
 import { ArrowRight } from "lucide-react";
 
 export default function LandingPage() {
@@ -17,7 +16,7 @@ export default function LandingPage() {
           </p>
         </header>
 
-        <form action={requestMagicLinkAction} className="flex flex-col gap-4">
+        <form action="/api/auth/request-link" method="POST" className="flex flex-col gap-4">
           <input
             type="email"
             name="email"
