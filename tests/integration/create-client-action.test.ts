@@ -2,8 +2,8 @@
  * Integration tests for createClientAction (actions/clients.ts).
  *
  * Coverage decision: option (b)(ii) — integration tests for the server action
- * (real DB, real getContext via runWithContext, mocked next/navigation redirect).
- * Server component rendering deferred to Phase H E2E per Task 36/37 precedent.
+ * (real DB, real getContext via runWithContext). Server component rendering
+ * deferred to Phase H E2E per Task 36/37 precedent.
  *
  * getContext() approach: use runWithContext() from lib/auth/context — the action
  * calls getContext() which reads AsyncLocalStorage; wrapping the call in
@@ -11,9 +11,8 @@
  * of the module is required. This is cleaner than vi.mock and exercises the real
  * code path.
  *
- * redirect() approach: mock next/navigation so redirect() throws
- * `Error("REDIRECT:<url>")` — mirrors the real NEXT_REDIRECT throw without
- * requiring a full Next.js runtime.
+ * The action returns the created client row (the calling Route Handler owns the
+ * redirect), so these tests assert the returned row rather than a redirect throw.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,16 +23,6 @@ import { Pool } from "pg";
 import type * as DbModule from "@/lib/db";
 import type { createClientAction } from "@/actions/clients";
 import type { runWithContext } from "@/lib/auth/context";
-
-// ---------------------------------------------------------------------------
-// Mock next/navigation — redirect() must throw for Next.js server actions.
-// Must be declared before any module that imports it.
-// ---------------------------------------------------------------------------
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn((url: string) => {
-    throw new Error(`REDIRECT:${url}`);
-  }),
-}));
 
 // ---------------------------------------------------------------------------
 // Mock requireAdminSession — bypasses cookies()/Next.js request scope.
@@ -144,7 +133,7 @@ function clientCtx() {
 
 describe("createClientAction", () => {
   // Test 1: Happy path — admin context + full valid input
-  it("inserts client row, writes admin_action audit event, and redirects to /admin/clients/:id", async () => {
+  it("inserts client row, writes admin_action audit event, and returns the created row", async () => {
     const fd = makeFormData({
       slug: "adrena",
       name: "Adrena Trading",
@@ -152,22 +141,20 @@ describe("createClientAction", () => {
       logoUrl: "https://cdn.adrena.xyz/logo.png",
     });
 
-    let caughtErr: Error | undefined;
+    let created: Awaited<ReturnType<NonNullable<typeof action>>> | undefined;
     await ctxHelper!(adminCtx(), async () => {
-      try {
-        await action!(fd);
-        expect.fail("expected NEXT_REDIRECT throw");
-      } catch (err) {
-        caughtErr = err as Error;
-      }
+      created = await action!(fd);
     });
 
-    // Assert redirect threw with correct URL shape.
-    expect(caughtErr).toBeDefined();
-    expect(caughtErr!.message).toMatch(/^REDIRECT:\/admin\/clients\/[0-9a-f-]{36}$/);
+    // Assert the action returned the created row with the expected shape.
+    expect(created).toBeDefined();
+    expect(created!.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(created!.slug).toBe("adrena");
+    expect(created!.name).toBe("Adrena Trading");
+    expect(created!.brandColor).toBe("#00e5ff");
+    expect(created!.logoUrl).toBe("https://cdn.adrena.xyz/logo.png");
 
-    // Extract inserted client id from redirect URL.
-    const clientId = caughtErr!.message.replace("REDIRECT:/admin/clients/", "");
+    const clientId = created!.id;
 
     // Assert client row was inserted with correct fields.
     const { adminDb, schema } = dbModule!;
@@ -238,12 +225,9 @@ describe("createClientAction", () => {
     // action coerces to empty string then to undefined, createClient maps undefined → null.
 
     await ctxHelper!(adminCtx(), async () => {
-      try {
-        await action!(fd);
-        expect.fail("expected NEXT_REDIRECT throw");
-      } catch (err) {
-        expect((err as Error).message).toMatch(/^REDIRECT:/);
-      }
+      const created = await action!(fd);
+      expect(created.brandColor).toBeNull();
+      expect(created.logoUrl).toBeNull();
     });
 
     const { adminDb, schema } = dbModule!;
@@ -260,12 +244,7 @@ describe("createClientAction", () => {
 
     // Insert first — should succeed.
     await ctxHelper!(adminCtx(), async () => {
-      try {
-        await action!(fd1);
-      } catch (err) {
-        // NEXT_REDIRECT from first insert — expected.
-        expect((err as Error).message).toMatch(/^REDIRECT:/);
-      }
+      await action!(fd1);
     });
 
     // Insert second — should throw Postgres constraint error.

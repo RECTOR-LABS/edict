@@ -1,22 +1,18 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import type { Route } from "next";
-
 import { createClient } from "@/lib/db/queries/clients";
 import { writeAudit } from "@/lib/db/queries/audit";
 import { getContext } from "@/lib/auth/context";
 import { requireAdminSession } from "@/lib/auth/middleware";
 
 /**
- * Server action: create a new client (tenant).
+ * Server action: create a new client (tenant). Returns the created row so the
+ * calling Route Handler can own the post-create redirect (admin writes run as
+ * Route Handlers — see app/api/auth/request-link/route.ts for the why).
  *
  * Guard: admin context only. Validates slug regex and name presence before
  * touching the DB. Unique-slug violations propagate from createClient() —
  * no catch-wrap here per CLAUDE.md (no silent failures).
- *
- * IMPORTANT: redirect() throws a NEXT_REDIRECT internally. Do NOT wrap this
- * function in try/catch — callers must let the throw propagate.
  */
 export async function createClientAction(formData: FormData) {
   return requireAdminSession(async () => {
@@ -51,7 +47,6 @@ export async function createClientAction(formData: FormData) {
     },
   });
 
-  // redirect() throws NEXT_REDIRECT — must not be inside try/catch.
-  redirect(`/admin/clients/${c.id}` as Route);
+  return c;
   });
 }
