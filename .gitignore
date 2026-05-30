@@ -69,7 +69,7 @@ package-lock.json
 /tests/e2e/playwright-report/
 /tests/e2e/test-results/
 
-# Postgres backup dumps (bind-mounted in docker-compose.prod.yml)
+# Local Postgres backup dumps
 /backups/
 .vercel
 .env*

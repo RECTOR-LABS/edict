@@ -1,5 +1,7 @@
 # Edict Phase 1 MVP Implementation Plan
 
+> **Historical artifact (April 2026).** This is the completed Phase 1 build plan; it describes a self-hosted VPS/Docker deployment. Edict later migrated to **Vercel + Neon Postgres** (2026-05-30) — so the deployment/infra steps here no longer reflect production. Kept as a record of what was built — see `CLAUDE.md` and `docs/deployment-runbook.md` for the current state.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a multi-tenant client docs delivery platform that hosts the Adrena Trading Arena implementation plan at `edict.rectorspace.com`, authenticating clients via magic-link, enforcing hard tenant isolation at app + DB layers, with full audit logging.
