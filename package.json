@@ -10,7 +10,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build --turbopack",
     "start": "next start -p 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
