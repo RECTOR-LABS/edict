@@ -4419,7 +4419,7 @@ Create `docs/deployment-runbook.md`:
 1. Create Linux user: `sudo adduser edict && sudo usermod -aG docker edict`
 2. As `edict`: `mkdir -p ~/apps/edict/backups && cd ~/apps/edict`
 3. Clone repo: `git clone git@github.com:RECTOR-LABS/edict.git .`
-4. Symlink secrets file: `ln -s ~/Documents/secret/edict.env .env`
+4. Symlink secrets file: `ln -s <secret-store>/edict.env .env`
    (.env must define: DATABASE_URL, DATABASE_ADMIN_URL, POSTGRES_ADMIN_PASSWORD, APP_URL, RESEND_API_KEY, RESEND_FROM, ADMIN_BOOTSTRAP_EMAIL)
 5. Build + start: `docker compose -f docker-compose.prod.yml up -d --build`
 6. Apply hand-written migrations (if not auto-applied): `docker compose -f docker-compose.prod.yml exec app pnpm db:migrate`
