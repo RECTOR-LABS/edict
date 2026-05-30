@@ -70,3 +70,23 @@ jobs:
         # Each integration test file spins up its own postgres container via
         # testcontainers. GitHub-hosted ubuntu-latest has Docker preinstalled.
         run: pnpm exec vitest run tests/integration
+
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history so gitleaks scans every commit, not just the tip.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        # Pinned binary (matches the local pre-commit hook); avoids the
+        # gitleaks-action org-license path. Scans the entire history (--all).
+        run: |
+          VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --no-banner --log-opts="--all"
