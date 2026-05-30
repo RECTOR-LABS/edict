@@ -4515,7 +4515,7 @@ Do not submit until emails are confirmed.
 - [ ] **Step 1: Read source**
 
 ```bash
-cat /Users/rector/local-dev/adrena-trading-arena/docs/arena-implementation-plan.html | wc -l
+cat arena-implementation-plan.html | wc -l   # local Adrena source doc
 # expected: 1358 lines
 ```
 

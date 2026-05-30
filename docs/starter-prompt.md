@@ -22,8 +22,8 @@ Trigger: Need to deliver Adrena Trading Arena implementation plan to their team
 professionally — not as a raw .html attachment. This will scale to every future
 RECTOR LABS client engagement (Adrena today, X tomorrow, future clients forever).
 
-Existing precedent: team-docs.arbital.xyz in Dex-Bot-V2 uses single-creds HTTP
-Basic Auth (team/arbital123). Edict is a proper multi-tenant evolution of that
+Existing precedent: a prior internal team-docs site used a single shared
+HTTP Basic Auth credential. Edict is a proper multi-tenant evolution of that
 pattern — per-client isolation, magic-link auth, analytics, admin panel.
 
 ═══ DOMAIN & DEPLOYMENT ═══
@@ -82,11 +82,10 @@ arena-implementation-plan.html via Edict by end of month, not raw file.
 - No hardcoded secrets — env vars only, use ~/Documents/secret/.env pattern.
 
 ═══ ASSETS TO REFERENCE ═══
-- /Users/rector/local-dev/adrena-trading-arena/docs/arena-walkthrough.html and
-  arena-implementation-plan.html — these are the first docs to host on Edict
-  (they show the design language expected).
-- /Users/rector/local-dev/VOT-Labs/Dex-Bot-V2/apps/api/src/middleware/ops_auth.rs
-  — the existing basic-auth pattern to evolve from.
+- The Adrena walkthrough + implementation-plan HTML docs (kept locally) — the
+  first docs to host on Edict; they show the design language expected.
+- An earlier single-shared-credential basic-auth middleware in a separate
+  private service — the pattern Edict evolves from.
 
 Let's start with the brainstorm. First question: what tech stack feels right?
 ```
