@@ -396,7 +396,7 @@ Retention: indefinite in Phase 1. Partition by month if volume demands it later.
 ```
 ~/apps/edict/                         (owned by `edict` Linux user)
 ├── docker-compose.yml                (name: edict)
-├── .env                              (symlink → ~/Documents/secret/edict.env)
+├── .env                              (symlink → <secret-store>/edict.env)
 └── backups/                          (nightly pg_dump destination)
 
 Compose services:
@@ -417,7 +417,7 @@ Cleanup after deploy (per global standard):
 
 Cloudflare: proxied A record `edict → VPS IP`, full-strict SSL. No wildcard (path routing).
 
-**Env vars** (from `~/Documents/secret/edict.env`; never committed):
+**Env vars** (from `<secret-store>/edict.env`; never committed):
 
 | Var | Purpose |
 |---|---|
