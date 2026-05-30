@@ -44,7 +44,9 @@ Origin: born from the need to deliver consulting/engagement docs (Adrena Trading
 
 ## Current Status
 
-**Live in production on Vercel + Neon Postgres** — migrated off the VPS on 2026-05-30. `edict.rectorspace.com` is served by Vercel via Cloudflare (proxied, Full-strict TLS). The old VPS is kept ~30 days as a fallback, then decommissioned.
+**Live in production on Vercel + Neon Postgres** — migrated off the VPS on 2026-05-30. `edict.rectorspace.com` is served by Vercel via Cloudflare (proxied, Full-strict TLS).
+
+The old VPS is kept as a short-lived rollback fallback. **Pending: decommission it ~2 weeks post-cutover (~mid-June 2026)** — deliberately sooner than a full 30 days, because the VPS database froze at cutover (Neon has been authoritative since), so the fallback's value decays quickly; the durable safety net is the archived DB dump + Neon's own backups, not a rollback to stale data. The step-by-step teardown runbook is kept in the private session-handoff notes (intentionally out of this public repo).
 
 ### Stack
 - **Next.js 16** (App Router). Admin writes go through Route Handlers under `app/api/admin/**` (not Server Actions — avoids a Next 16 streaming bug on Vercel).
