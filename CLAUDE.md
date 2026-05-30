@@ -19,9 +19,11 @@ Origin: born from the need to deliver consulting/engagement docs (Adrena Trading
 
 ## Repo
 
-- GitHub: `RECTOR-LABS/edict`
-- Mirror to GitLab via existing mirror-gitlab.yml workflow (to be added during setup).
-- Target domain: `edict.rectorspace.com`.
+- GitHub: `RECTOR-LABS/edict` — **public** repository.
+- Production domain: `edict.rectorspace.com`.
+- Deploy: **Vercel native Git** — push to `main` → production deploy; PR → preview deploy.
+- Secret hygiene: `gitleaks` pre-commit hook + CI `secret-scan` job. The repo is public — never commit secrets, internal hostnames, or cross-project paths.
+- GitLab mirror: `mirror-gitlab.yml` force-pushes `main` to GitLab on each push (backup).
 
 ## Non-Negotiables
 
@@ -31,7 +33,7 @@ Origin: born from the need to deliver consulting/engagement docs (Adrena Trading
 - **Production-grade from day one.** Per RECTOR global standard. No "demo quality" shortcuts.
 - **Dev-humble tone** in all user-facing copy.
 - **No Unicode emojis as icons** in UI. Use Lucide React or Phosphor.
-- **No hardcoded secrets.** Env vars only. Use `~/Documents/secret/.env` pattern where applicable.
+- **No hardcoded secrets.** Env vars only — untracked `.env` locally, Vercel project env in production. Never commit secrets.
 - **Dual remote push** — always push to GitHub and GitLab (via mirror workflow).
 
 ## Target Use Cases
@@ -42,18 +44,25 @@ Origin: born from the need to deliver consulting/engagement docs (Adrena Trading
 
 ## Current Status
 
-Bootstrapping. See [docs/starter-prompt.md](docs/starter-prompt.md) for the kickoff prompt. Tech stack, routing, and architecture decisions will be made via the brainstorming skill in the first working session.
+**Live in production on Vercel + Neon Postgres** — migrated off the VPS on 2026-05-30. `edict.rectorspace.com` is served by Vercel via Cloudflare (proxied, Full-strict TLS). The old VPS is kept ~30 days as a fallback, then decommissioned.
+
+### Stack
+- **Next.js 16** (App Router). Admin writes go through Route Handlers under `app/api/admin/**` (not Server Actions — avoids a Next 16 streaming bug on Vercel).
+- **Neon Postgres** + **Drizzle ORM**, with **Postgres RLS** enforcing tenant isolation (`withClientScope`). `lib/db` selects its driver by host: `@neondatabase/serverless` for `*.neon.tech`, `node-postgres` for local/CI.
+- **Magic-link auth** (no passwords) via emailed links (**Resend**).
+- **Tailwind** styling; **Lucide** icons.
+- **Hosting:** Vercel (Hobby) — production + preview via native Git; Cloudflare proxy in front.
 
 ## References
 
-- `/Users/rector/local-dev/adrena-trading-arena/docs/arena-implementation-plan.html` — the first real doc Edict will host; design language reference.
-- `/Users/rector/local-dev/VOT-Labs/Dex-Bot-V2/apps/api/src/middleware/ops_auth.rs` — existing single-creds auth pattern we're evolving from.
-- `/Users/rector/local-dev/core` — Rails monolith for rectorspace.com (separate from Edict; Edict is its own standalone app).
+- The first real doc Edict hosts is the Adrena implementation plan (design-language reference; kept locally, outside this repo).
+- The auth model evolved from an earlier single-shared-credential HTTP-auth pattern used in a separate private service.
+- rectorspace.com itself runs on a separate private app; Edict is fully standalone.
 
 ## Workflow Conventions
 
 - Branch prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`.
 - One commit per feature/fix — never batch.
-- Pre-commit hooks: enable before first real commit.
+- Pre-commit hooks: enabled — `gitleaks` secret scan (local hook + CI `secret-scan` job).
 - Tests mandatory for every function/hook/component (per global standard — 80% coverage new code).
 - Check CI status before starting new work (per global standard).

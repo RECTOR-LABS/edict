@@ -485,8 +485,7 @@ None at spec-write time. If any emerge during planning or implementation, they g
 
 ## 11. References
 
-- `/Users/rector/local-dev/adrena-trading-arena/docs/arena-implementation-plan.html` — first doc Edict will host; design language reference.
-- `/Users/rector/local-dev/adrena-trading-arena/docs/arena-walkthrough.html` — companion doc, same design language.
-- `/Users/rector/local-dev/VOT-Labs/Dex-Bot-V2/apps/api/src/middleware/ops_auth.rs` — single-creds precedent Edict evolves from.
+- The Adrena implementation-plan + walkthrough HTML docs (kept locally) — first docs Edict will host; design-language reference.
+- An earlier single-shared-credential auth middleware in a separate private service — the precedent Edict evolves from.
 - `docs/starter-prompt.md` — original kickoff prompt that seeded this spec.
 - `~/.claude/projects/-Users-rector-local-dev-edict/memory/feedback_ui_workflow.md` — aidesigner workflow memory.
