@@ -1,5 +1,7 @@
 # Two-Step Verify Implementation Plan
 
+> **Historical artifact (April 2026).** Completed build plan for the two-step magic-link verify flow (the feature is live). Predates the Vercel + Neon migration (2026-05-30); any infra references are historical. The shipped behaviour is documented in `docs/deployment-runbook.md` → *Two-step magic-link verify*.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Protect magic-link tokens from being silently consumed by email-scanner pre-fetching (Proton, Outlook ATP, Google Safe Browsing, corporate gateways) by splitting `/auth/verify` into a scanner-safe GET (landing page, no DB touch) and a human-initiated POST (consume token + set cookie + redirect).

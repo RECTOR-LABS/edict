@@ -1,5 +1,7 @@
 # Edict — Design Spec
 
+> **Historical artifact (April 2026).** This records the Phase 1 design decisions as they stood at the time, including a self-hosted Postgres-on-VPS deployment. The stack later migrated to **Vercel + Neon Postgres** (2026-05-30). Kept as a decision record — see `CLAUDE.md` and `docs/deployment-runbook.md` for the current architecture.
+
 **Date:** 2026-04-19
 **Status:** Approved for implementation planning
 **Scope:** Phase 1 MVP — deliver the Adrena Trading Arena implementation plan to the Adrena team via Edict by end of month.
