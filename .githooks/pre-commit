@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Pre-commit secret scan - blocks commits that contain secrets.
+# CI enforces the same check on every push/PR (.github/workflows/ci.yml -> secret-scan job).
+# This local hook just catches mistakes earlier. It is activated by the package.json
+# "prepare" script (which sets git config core.hooksPath .githooks) on `pnpm install`.
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "[gitleaks] not installed - skipping local secret scan (CI still enforces it)."
+  echo "[gitleaks] install it with:  brew install gitleaks"
+  exit 0
+fi
+
+echo "[gitleaks] scanning staged changes for secrets..."
+gitleaks protect --staged --redact --no-banner
