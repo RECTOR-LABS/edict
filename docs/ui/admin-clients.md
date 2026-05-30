@@ -68,9 +68,10 @@ No emoji. No per-file-type icons. No fake delta metadata. Design consistency wit
    - KEEP: slug (cyan mono), name, brand color (swatch + hex), created at (YYYY-MM-DD), Open arrow.
 
 2. **`app/(admin)/admin/clients/new/page.tsx`** (server component — create form)
-   - Renders form with 4 fields wired to `createClientAction` via `<form action={createClientAction}>`.
+   - Renders form with 4 fields posting to a **Route Handler**: `<form action="/api/admin/clients" method="POST">`.
    - Back link to `/admin/clients` at top.
-   - No client-side JS — pure server action submission.
+   - No client-side JS — plain HTML form POST.
+   - **Migration note (2026-05-30):** originally a direct Server Action (`<form action={createClientAction}>`); rewired during the Vercel migration to a Route Handler that calls the same `createClientAction` (logic unchanged, only the form target moved — avoids a Next 16 Server-Action streaming bug on Vercel). Applies to all admin write forms in this doc.
 
 3. **`actions/clients.ts`** (server action)
    - Per plan lines 2753-2784 verbatim. Gates on `getContext().kind === "admin"`. Validates slug regex `/^[a-z0-9-]+$/`. Validates name non-empty. Calls `createClient()` (Task 32). Writes `admin_action` audit event. Redirects to `/admin/clients/${c.id}` via `redirect()` from `next/navigation`.

@@ -1,6 +1,8 @@
 # Edict — Starter Prompt
 
-Paste the prompt below into a fresh Claude Code session opened in this directory (`~/local-dev/edict`). Edit anything you'd like to refine before firing.
+> **Historical artifact (April 2026).** This is the original kickoff prompt used to bootstrap Edict — written before any stack decisions were made (it literally asks "VPS? Vercel? Fly?"). All of those questions are long since answered: Edict is live on **Vercel + Neon Postgres**. Kept as the project's origin record. For the current state see `README.md`, `CLAUDE.md`, and `docs/deployment-runbook.md`.
+
+Paste the prompt below into a fresh Claude Code session opened in this directory. Edit anything you'd like to refine before firing.
 
 ---
 
@@ -79,7 +81,7 @@ arena-implementation-plan.html via Edict by end of month, not raw file.
 - Production-grade from day one (per RECTOR's global standard).
 - Dev-humble tone in any user-facing copy.
 - No Unicode emojis as icons in UI — use Lucide React (or equivalent).
-- No hardcoded secrets — env vars only, use ~/Documents/secret/.env pattern.
+- No hardcoded secrets — env vars only (untracked .env locally, platform env in production).
 
 ═══ ASSETS TO REFERENCE ═══
 - The Adrena walkthrough + implementation-plan HTML docs (kept locally) — the
